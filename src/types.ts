@@ -36,13 +36,30 @@ export const DEDUCTION_CATEGORIES = [
 
 export type StandardDeductionCategory = (typeof DEDUCTION_CATEGORIES)[number];
 
+export const PAYMENT_METHODS = [
+  'Bank Transfer',
+  'Debit Card',
+  'Credit Card',
+  'Direct Debit',
+  'Wise',
+  'PayPal',
+  'Cash',
+  'Other',
+] as const;
+
+export type PaymentMethod = (typeof PAYMENT_METHODS)[number];
+
 export interface Deduction {
   id: string;
   financialYear: string; // FY key = the calendar year the FY starts in, e.g. "2026" for FY2026-27
   description: string;
   category: string; // one of DEDUCTION_CATEGORIES, or a user-defined custom category
   amount: number;
-  createdAt: string; // ISO date
+  purchaseDate: string; // ISO date the expense was incurred
+  vendor: string; // who the payment was made to
+  paymentMethod: string; // one of PAYMENT_METHODS
+  notes?: string;
+  createdAt: string; // ISO date the line item was logged
 }
 
 export interface AppData {

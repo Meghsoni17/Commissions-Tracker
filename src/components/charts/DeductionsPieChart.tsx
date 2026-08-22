@@ -1,6 +1,6 @@
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts';
 import { roleColorHex } from '../../lib/colors';
-import { formatCurrency, formatPercent } from '../../lib/calculations';
+import { formatCurrencyExact, formatPercent } from '../../lib/calculations';
 import { useIsDark } from '../../hooks/useIsDark';
 import { ChartLegend } from './ChartLegend';
 
@@ -59,7 +59,7 @@ function DeductionTooltip({ active, payload }: { active?: boolean; payload?: { p
     >
       <div className="font-medium mb-1">{slice.category}</div>
       <div className="flex items-center justify-between gap-4">
-        <span className="tabular-nums">{formatCurrency(slice.amount)}</span>
+        <span className="tabular-nums">{formatCurrencyExact(slice.amount)}</span>
         <span className="tabular-nums">{formatPercent(slice.pct)}</span>
       </div>
     </div>

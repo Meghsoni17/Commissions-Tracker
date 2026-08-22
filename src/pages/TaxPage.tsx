@@ -1,12 +1,12 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { useData } from '../context/DataContext';
 import type { Deduction } from '../types';
-import { DEDUCTION_CATEGORIES } from '../types';
+import { DEDUCTION_CATEGORIES, PAYMENT_METHODS } from '../types';
 import { StatTile } from '../components/StatTile';
 import { DeductionsPieChart, type DeductionSlice } from '../components/charts/DeductionsPieChart';
-import { formatCurrency, sumEntries } from '../lib/calculations';
-import { todayISO } from '../lib/dateUtils';
+import { formatCurrencyExact, sumEntries } from '../lib/calculations';
+import { formatShortDate, todayISO } from '../lib/dateUtils';
 import { currentFYKey, fyKeyForISODate, fyKeyOptions, fyLabel, isISODateInFY } from '../lib/financialYear';
 import { bracketsForFY, calculateIncomeTax, calculateMedicareLevy, hasBracketsForFY } from '../lib/taxBrackets';
 
@@ -17,10 +17,23 @@ interface DeductionFormState {
   amount: string;
   categoryChoice: string;
   customCategory: string;
+  purchaseDate: string;
+  vendor: string;
+  paymentMethod: string;
+  notes: string;
 }
 
 function emptyForm(): DeductionFormState {
-  return { description: '', amount: '', categoryChoice: DEDUCTION_CATEGORIES[0], customCategory: '' };
+  return {
+    description: '',
+    amount: '',
+    categoryChoice: DEDUCTION_CATEGORIES[0],
+    customCategory: '',
+    purchaseDate: todayISO(),
+    vendor: '',
+    paymentMethod: PAYMENT_METHODS[0],
+    notes: '',
+  };
 }
 
 export function TaxPage() {
@@ -28,6 +41,7 @@ export function TaxPage() {
   const [selectedFY, setSelectedFY] = useState(currentFYKey());
   const [form, setForm] = useState<DeductionFormState>(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const fyOptions = useMemo(() => {
     const known = [...entries.map((e) => fyKeyForISODate(e.weekStart)), ...deductions.map((d) => d.financialYear)];
@@ -77,6 +91,10 @@ export function TaxPage() {
       amount: String(d.amount),
       categoryChoice: isStandard ? d.category : CUSTOM_CATEGORY,
       customCategory: isStandard ? '' : d.category,
+      purchaseDate: d.purchaseDate,
+      vendor: d.vendor,
+      paymentMethod: d.paymentMethod,
+      notes: d.notes ?? '',
     });
   }
 
@@ -93,6 +111,10 @@ export function TaxPage() {
       description,
       category,
       amount,
+      purchaseDate: form.purchaseDate || todayISO(),
+      vendor: form.vendor.trim(),
+      paymentMethod: form.paymentMethod,
+      notes: form.notes.trim() || undefined,
       createdAt: existing?.createdAt ?? todayISO(),
     };
     if (editingId) {
@@ -101,6 +123,10 @@ export function TaxPage() {
       addDeduction(payload);
     }
     resetForm();
+  }
+
+  function toggleExpanded(id: string) {
+    setExpandedId((cur) => (cur === id ? null : id));
   }
 
   return (
@@ -149,10 +175,10 @@ export function TaxPage() {
             Estimated Tax Saving
           </span>
           <span className="text-3xl font-semibold" style={{ color: 'var(--success)' }}>
-            {formatCurrency(savings)}
+            {formatCurrencyExact(savings)}
           </span>
           <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
-            from {formatCurrency(totalDeductions)} in deductions
+            from {formatCurrencyExact(totalDeductions)} in deductions
           </span>
         </div>
       </div>
@@ -162,7 +188,7 @@ export function TaxPage() {
 
         <div className="grid grid-cols-2 gap-3 mb-4">
           <StatTile label="Deductions Logged" value={String(fyDeductions.length)} />
-          <StatTile label="Total Deducted" value={formatCurrency(totalDeductions)} />
+          <StatTile label="Total Deducted" value={formatCurrencyExact(totalDeductions)} />
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-3 mb-4">
@@ -213,6 +239,47 @@ export function TaxPage() {
                 style={inputStyle}
               />
             </Field>
+            <Field label="Date of Purchase">
+              <input
+                type="date"
+                value={form.purchaseDate}
+                onChange={(e) => setForm((f) => ({ ...f, purchaseDate: e.target.value }))}
+                className="w-full rounded-md border px-2 py-1.5 text-sm outline-none"
+                style={inputStyle}
+              />
+            </Field>
+            <Field label="Vendor">
+              <input
+                value={form.vendor}
+                onChange={(e) => setForm((f) => ({ ...f, vendor: e.target.value }))}
+                placeholder="e.g. Officeworks"
+                className="w-full rounded-md border px-2 py-1.5 text-sm outline-none"
+                style={inputStyle}
+              />
+            </Field>
+            <Field label="Payment Method">
+              <select
+                value={form.paymentMethod}
+                onChange={(e) => setForm((f) => ({ ...f, paymentMethod: e.target.value }))}
+                className="w-full rounded-md border px-2 py-1.5 text-sm outline-none"
+                style={inputStyle}
+              >
+                {PAYMENT_METHODS.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Notes">
+              <input
+                value={form.notes}
+                onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                placeholder="Additional details (optional)"
+                className="w-full rounded-md border px-2 py-1.5 text-sm outline-none"
+                style={inputStyle}
+              />
+            </Field>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -231,10 +298,10 @@ export function TaxPage() {
         </form>
 
         <div className="overflow-x-auto rounded-lg border" style={{ borderColor: 'var(--border)' }}>
-          <table className="w-full text-sm border-collapse min-w-[560px]">
+          <table className="w-full text-sm border-collapse min-w-[720px]">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                {['Description', 'Category', 'Amount', ''].map((h) => (
+                {['Date', 'Vendor', 'Description', 'Category', 'Amount', ''].map((h) => (
                   <th key={h} className="text-left px-3 py-2 font-medium" style={{ color: 'var(--text-muted)' }}>
                     {h}
                   </th>
@@ -244,27 +311,56 @@ export function TaxPage() {
             <tbody>
               {fyDeductions.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-3 py-6 text-center" style={{ color: 'var(--text-muted)' }}>
+                  <td colSpan={6} className="px-3 py-6 text-center" style={{ color: 'var(--text-muted)' }}>
                     No deductions logged for {fyLabel(selectedFY)} yet.
                   </td>
                 </tr>
               )}
               {fyDeductions.map((d) => (
-                <tr key={d.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                  <td className="px-3 py-2">{d.description}</td>
-                  <td className="px-3 py-2" style={{ color: 'var(--text-secondary)' }}>
-                    {d.category}
-                  </td>
-                  <td className="px-3 py-2 tabular-nums font-medium">{formatCurrency(d.amount)}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">
-                    <button onClick={() => startEdit(d)} className="text-xs mr-2 underline cursor-pointer" style={{ color: 'var(--text-secondary)' }}>
-                      Edit
-                    </button>
-                    <button onClick={() => deleteDeduction(d.id)} className="text-xs underline cursor-pointer" style={{ color: 'var(--critical)' }}>
-                      Delete
-                    </button>
-                  </td>
-                </tr>
+                <Fragment key={d.id}>
+                  <tr style={{ borderBottom: expandedId === d.id ? 'none' : '1px solid var(--border)' }}>
+                    <td className="px-3 py-2 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
+                      {formatShortDate(d.purchaseDate)}
+                    </td>
+                    <td className="px-3 py-2" style={{ color: 'var(--text-secondary)' }}>
+                      {d.vendor || '—'}
+                    </td>
+                    <td className="px-3 py-2">{d.description}</td>
+                    <td className="px-3 py-2" style={{ color: 'var(--text-secondary)' }}>
+                      {d.category}
+                    </td>
+                    <td className="px-3 py-2 tabular-nums font-medium">{formatCurrencyExact(d.amount)}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <button
+                        onClick={() => toggleExpanded(d.id)}
+                        className="text-xs mr-2 underline cursor-pointer"
+                        style={{ color: 'var(--text-secondary)' }}
+                      >
+                        {expandedId === d.id ? 'Hide' : 'Details'}
+                      </button>
+                      <button onClick={() => startEdit(d)} className="text-xs mr-2 underline cursor-pointer" style={{ color: 'var(--text-secondary)' }}>
+                        Edit
+                      </button>
+                      <button onClick={() => deleteDeduction(d.id)} className="text-xs underline cursor-pointer" style={{ color: 'var(--critical)' }}>
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                  {expandedId === d.id && (
+                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td colSpan={6} className="px-3 pb-3 pt-0" style={{ background: 'var(--surface-2)' }}>
+                        <div className="flex flex-wrap gap-x-6 gap-y-1 pt-2 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                          <span>
+                            <strong style={{ color: 'var(--text-primary)' }}>Payment Method:</strong> {d.paymentMethod}
+                          </span>
+                          <span>
+                            <strong style={{ color: 'var(--text-primary)' }}>Notes:</strong> {d.notes || '—'}
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
               ))}
             </tbody>
           </table>
@@ -300,11 +396,11 @@ function TaxSummaryCard({
       style={{ borderColor: highlight ? 'var(--series-1)' : 'var(--border)', background: 'var(--surface-1)' }}
     >
       <h4 className="text-sm font-medium">{title}</h4>
-      <TaxRow label="Taxable Income" value={formatCurrency(taxableIncome)} />
-      <TaxRow label="Income Tax" value={formatCurrency(incomeTax)} />
-      <TaxRow label="Medicare Levy (2%)" value={formatCurrency(medicare)} />
+      <TaxRow label="Taxable Income" value={formatCurrencyExact(taxableIncome)} />
+      <TaxRow label="Income Tax" value={formatCurrencyExact(incomeTax)} />
+      <TaxRow label="Medicare Levy (2%)" value={formatCurrencyExact(medicare)} />
       <div className="pt-2 mt-1" style={{ borderTop: '1px solid var(--border)' }}>
-        <TaxRow label="Total Estimated Tax" value={formatCurrency(total)} bold />
+        <TaxRow label="Total Estimated Tax" value={formatCurrencyExact(total)} bold />
       </div>
     </div>
   );

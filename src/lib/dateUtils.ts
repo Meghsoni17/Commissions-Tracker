@@ -70,3 +70,7 @@ export function recentMonths(count: number): string[] {
 export function todayISO(): string {
   return format(new Date(), ISO_DATE);
 }
+
+export function formatShortDate(iso: string): string {
+  return format(parseISO(iso), 'd MMM yyyy');
+}

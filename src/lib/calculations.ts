@@ -121,6 +121,13 @@ export function formatCurrency(n: number): string {
   return `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
 }
 
+/** Never abbreviates and always shows exact cents — for ledger-style figures (deductions, tax estimates) where precision must not be lost. */
+export function formatCurrencyExact(n: number): string {
+  const sign = n < 0 ? '-' : '';
+  const abs = Math.abs(n);
+  return `${sign}$${abs.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
 export function formatPercent(n: number | null): string {
   if (n === null) return '—';
   return `${(n * 100).toFixed(0)}%`;
