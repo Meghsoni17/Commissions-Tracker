@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { DataProvider, useData } from './context/DataContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { Layout, type Tab } from './components/Layout';
+import { LockScreen } from './components/LockScreen';
 import { Dashboard } from './pages/Dashboard';
 import { EntriesPage } from './pages/EntriesPage';
 import { RolesPage } from './pages/RolesPage';
@@ -39,11 +40,17 @@ function AppShell() {
 }
 
 function App() {
+  const [unlocked, setUnlocked] = useState(false);
+
   return (
     <ThemeProvider>
-      <DataProvider>
-        <AppShell />
-      </DataProvider>
+      {unlocked ? (
+        <DataProvider>
+          <AppShell />
+        </DataProvider>
+      ) : (
+        <LockScreen onUnlock={() => setUnlocked(true)} />
+      )}
     </ThemeProvider>
   );
 }
