@@ -22,7 +22,7 @@ function SampleDataBanner() {
         className="rounded-md px-3 py-1 text-xs font-medium cursor-pointer shrink-0"
         style={{ border: '1px solid var(--border)', color: 'var(--text-primary)' }}
       >
-        Clear sample data
+        Clear Sample Data
       </button>
     </div>
   );

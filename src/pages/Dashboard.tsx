@@ -123,24 +123,24 @@ export function Dashboard() {
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <StatTile
-          label="This week's commission"
+          label="This Week's Commission"
           value={formatCurrency(thisWeekTotals.commission)}
           sublabel={<DeltaLabel current={thisWeekTotals.commission} previous={lastWeekTotals.commission} periodLabel="last week" />}
         />
         <StatTile
-          label="This month's commission"
+          label="This Month's Commission"
           value={formatCurrency(thisMonthTotals.commission)}
           sublabel={<DeltaLabel current={thisMonthTotals.commission} previous={lastMonthTotals.commission} periodLabel="last month" />}
         />
-        <StatTile label="All-time show rate" value={formatPercent(allTimeRates.showRate)} sublabel={`${allTime.showed} of ${allTime.booked} booked calls`} />
-        <StatTile label="All-time close rate" value={formatPercent(allTimeRates.closeRate)} sublabel={`${allTime.closed} of ${allTime.showed} shown calls`} />
+        <StatTile label="All-Time Show Rate" value={formatPercent(allTimeRates.showRate)} sublabel={`${allTime.showed} of ${allTime.booked} booked calls`} />
+        <StatTile label="All-Time Close Rate" value={formatPercent(allTimeRates.closeRate)} sublabel={`${allTime.closed} of ${allTime.showed} shown calls`} />
       </div>
 
       <MonthlyGoalSection />
 
       <div className="rounded-xl border p-4" style={{ borderColor: 'var(--border)', background: 'var(--surface-1)' }}>
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-          <h3 className="text-sm font-medium">Commission by role</h3>
+          <h3 className="text-sm font-medium">Commission By Role</h3>
           <div className="inline-flex rounded-lg border p-0.5 text-xs" style={{ borderColor: 'var(--border)' }}>
             {(['week', 'month'] as const).map((m) => (
               <button
@@ -153,7 +153,7 @@ export function Dashboard() {
                   fontWeight: trendMode === m ? 600 : 400,
                 }}
               >
-                {m === 'week' ? 'Last 8 weeks' : 'Last 6 months'}
+                {m === 'week' ? 'Last 8 Weeks' : 'Last 6 Months'}
               </button>
             ))}
           </div>
@@ -163,12 +163,12 @@ export function Dashboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="rounded-xl border p-4" style={{ borderColor: 'var(--border)', background: 'var(--surface-1)' }}>
-          <h3 className="text-sm font-medium mb-3">Show rate vs. close rate by role</h3>
+          <h3 className="text-sm font-medium mb-3">Show Rate Vs. Close Rate By Role</h3>
           <RateComparisonChart data={rateData} />
         </div>
 
         <div className="rounded-xl border p-4 overflow-x-auto" style={{ borderColor: 'var(--border)', background: 'var(--surface-1)' }}>
-          <h3 className="text-sm font-medium mb-3">All-time totals by role</h3>
+          <h3 className="text-sm font-medium mb-3">All-Time Totals By Role</h3>
           <table className="w-full text-sm border-collapse min-w-[420px]">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>

@@ -7,7 +7,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'dashboard', label: 'Dashboard' },
   { key: 'entries', label: 'Entries' },
   { key: 'roles', label: 'Roles' },
-  { key: 'tax', label: 'Tax estimate' },
+  { key: 'tax', label: 'Tax Estimate' },
 ];
 
 export function Layout({

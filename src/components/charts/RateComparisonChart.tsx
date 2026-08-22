@@ -20,8 +20,8 @@ export function RateComparisonChart({ data }: { data: RatePoint[] }) {
     <div className="flex flex-col gap-2">
       <ChartLegend
         items={[
-          { label: 'Show rate', color: showColor },
-          { label: 'Close rate', color: closeColor },
+          { label: 'Show Rate', color: showColor },
+          { label: 'Close Rate', color: closeColor },
         ]}
       />
       <ResponsiveContainer width="100%" height={220}>
@@ -48,7 +48,7 @@ export function RateComparisonChart({ data }: { data: RatePoint[] }) {
                   <div className="font-medium mb-1">{label}</div>
                   {payload.map((p) => (
                     <div key={p.dataKey as string} className="flex items-center justify-between gap-4">
-                      <span style={{ color: 'var(--text-secondary)' }}>{p.dataKey === 'showRate' ? 'Show rate' : 'Close rate'}</span>
+                      <span style={{ color: 'var(--text-secondary)' }}>{p.dataKey === 'showRate' ? 'Show Rate' : 'Close Rate'}</span>
                       <span className="tabular-nums">{formatPercent(p.value as number)}</span>
                     </div>
                   ))}

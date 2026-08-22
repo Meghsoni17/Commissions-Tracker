@@ -91,7 +91,7 @@ export function EntriesPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h2 className="text-xl font-semibold">Weekly entries</h2>
+        <h2 className="text-xl font-semibold">Weekly Entries</h2>
         {roles.length > 0 && (
           <select
             value={roleFilter}
@@ -99,7 +99,7 @@ export function EntriesPage() {
             className="rounded-lg border px-3 py-1.5 text-sm outline-none"
             style={{ borderColor: 'var(--border)', background: 'var(--surface-1)', color: 'var(--text-primary)' }}
           >
-            <option value="all">All roles</option>
+            <option value="all">All Roles</option>
             {roles.map((r) => (
               <option key={r.id} value={r.id}>
                 {r.name}
@@ -134,7 +134,7 @@ export function EntriesPage() {
                 ))}
               </select>
             </Field>
-            <Field label="Week of">
+            <Field label="Week Of">
               <input
                 type="date"
                 value={form.weekStart}
@@ -187,7 +187,7 @@ export function EntriesPage() {
           </div>
           <input
             type="text"
-            placeholder="Notes (optional)"
+            placeholder="Notes (Optional)"
             value={form.notes}
             onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
             className="w-full rounded-md border px-2 py-1.5 text-sm outline-none"
@@ -200,7 +200,7 @@ export function EntriesPage() {
               className="rounded-lg px-4 py-2 text-sm font-medium cursor-pointer text-white disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ background: 'var(--series-1)' }}
             >
-              {editingId ? 'Save changes' : 'Add entry'}
+              {editingId ? 'Save Changes' : 'Add Entry'}
             </button>
             {editingId && (
               <button type="button" onClick={resetForm} className="text-sm cursor-pointer" style={{ color: 'var(--text-muted)' }}>
@@ -215,7 +215,7 @@ export function EntriesPage() {
         <table className="w-full text-sm border-collapse min-w-[720px]">
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border)' }}>
-              {['Week', 'Role', 'Booked', 'Showed', 'Closed', 'Show rate', 'Close rate', 'Commission', ''].map((h) => (
+              {['Week', 'Role', 'Booked', 'Showed', 'Closed', 'Show Rate', 'Close Rate', 'Commission', ''].map((h) => (
                 <th
                   key={h}
                   className="text-left px-3 py-2 font-medium"

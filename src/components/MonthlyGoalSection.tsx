@@ -37,14 +37,14 @@ export function MonthlyGoalSection() {
   return (
     <div className="rounded-xl border p-4" style={{ borderColor: 'var(--border)', background: 'var(--surface-1)' }}>
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-        <h3 className="text-sm font-medium">Monthly goal — {formatMonthLabel(thisMonth)}</h3>
+        <h3 className="text-sm font-medium">Monthly Goal — {formatMonthLabel(thisMonth)}</h3>
         {!editing && (
           <button
             onClick={startEdit}
             className="text-xs px-2 py-1 rounded-md cursor-pointer"
             style={{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
           >
-            {currentGoal > 0 ? 'Edit goal' : 'Set goal'}
+            {currentGoal > 0 ? 'Edit Goal' : 'Set Goal'}
           </button>
         )}
       </div>
@@ -59,7 +59,7 @@ export function MonthlyGoalSection() {
             value={draftAmount}
             onChange={(e) => setDraftAmount(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && save()}
-            placeholder="Goal amount ($)"
+            placeholder="Goal Amount ($)"
             className="w-40 rounded-md border px-2 py-1.5 text-sm outline-none tabular-nums"
             style={{ borderColor: 'var(--border)', background: 'var(--surface-3)', color: 'var(--text-primary)' }}
           />

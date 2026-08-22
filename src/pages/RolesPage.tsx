@@ -47,7 +47,7 @@ export function RolesPage() {
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-          placeholder="New role name (e.g. Account Executive)"
+          placeholder="New Role Name (e.g. Account Executive)"
           className="flex-1 rounded-lg border px-3 py-2 text-sm outline-none"
           style={{ borderColor: 'var(--border)', background: 'var(--surface-1)', color: 'var(--text-primary)' }}
         />
@@ -56,7 +56,7 @@ export function RolesPage() {
           className="rounded-lg px-4 py-2 text-sm font-medium cursor-pointer text-white"
           style={{ background: 'var(--series-1)' }}
         >
-          Add role
+          Add Role
         </button>
       </div>
 
@@ -130,8 +130,8 @@ export function RolesPage() {
                 <Metric label="Booked" value={String(totals.booked)} />
                 <Metric label="Showed" value={String(totals.showed)} />
                 <Metric label="Closed" value={String(totals.closed)} />
-                <Metric label="Show rate" value={formatPercent(totals.showRate)} />
-                <Metric label="Close rate" value={formatPercent(totals.closeRate)} />
+                <Metric label="Show Rate" value={formatPercent(totals.showRate)} />
+                <Metric label="Close Rate" value={formatPercent(totals.closeRate)} />
               </div>
             </div>
           );

@@ -107,7 +107,7 @@ export function TaxPage() {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h2 className="text-xl font-semibold">Tax estimate</h2>
+          <h2 className="text-xl font-semibold">Tax Estimate</h2>
           <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
             Estimate your Australian income tax on logged commission income, by financial year.
           </p>
@@ -139,14 +139,14 @@ export function TaxPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <TaxSummaryCard title="Before deductions" taxableIncome={grossIncome} incomeTax={taxBefore} medicare={medicareBefore} total={totalBefore} />
-        <TaxSummaryCard title="After deductions" taxableIncome={taxableAfter} incomeTax={taxAfter} medicare={medicareAfter} total={totalAfter} highlight />
+        <TaxSummaryCard title="Before Deductions" taxableIncome={grossIncome} incomeTax={taxBefore} medicare={medicareBefore} total={totalBefore} />
+        <TaxSummaryCard title="After Deductions" taxableIncome={taxableAfter} incomeTax={taxAfter} medicare={medicareAfter} total={totalAfter} highlight />
         <div
           className="rounded-xl border p-4 flex flex-col items-center justify-center gap-1 text-center"
           style={{ borderColor: 'var(--border)', background: 'var(--surface-1)' }}
         >
           <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-            Estimated tax saving
+            Estimated Tax Saving
           </span>
           <span className="text-3xl font-semibold" style={{ color: 'var(--success)' }}>
             {formatCurrency(savings)}
@@ -161,8 +161,8 @@ export function TaxPage() {
         <h3 className="text-sm font-medium mb-3">Deductions — {fyLabel(selectedFY)}</h3>
 
         <div className="grid grid-cols-2 gap-3 mb-4">
-          <StatTile label="Deductions logged" value={String(fyDeductions.length)} />
-          <StatTile label="Total deducted" value={formatCurrency(totalDeductions)} />
+          <StatTile label="Deductions Logged" value={String(fyDeductions.length)} />
+          <StatTile label="Total Deducted" value={formatCurrency(totalDeductions)} />
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-3 mb-4">
@@ -192,7 +192,7 @@ export function TaxPage() {
               </select>
             </Field>
             {form.categoryChoice === CUSTOM_CATEGORY && (
-              <Field label="Custom category">
+              <Field label="Custom Category">
                 <input
                   value={form.customCategory}
                   onChange={(e) => setForm((f) => ({ ...f, customCategory: e.target.value }))}
@@ -220,7 +220,7 @@ export function TaxPage() {
               className="rounded-lg px-4 py-2 text-sm font-medium cursor-pointer text-white"
               style={{ background: 'var(--series-1)' }}
             >
-              {editingId ? 'Save changes' : 'Add deduction'}
+              {editingId ? 'Save Changes' : 'Add Deduction'}
             </button>
             {editingId && (
               <button type="button" onClick={resetForm} className="text-sm cursor-pointer" style={{ color: 'var(--text-muted)' }}>
@@ -272,7 +272,7 @@ export function TaxPage() {
       </div>
 
       <div className="rounded-xl border p-4" style={{ borderColor: 'var(--border)', background: 'var(--surface-1)' }}>
-        <h3 className="text-sm font-medium mb-3">Deductions by category</h3>
+        <h3 className="text-sm font-medium mb-3">Deductions By Category</h3>
         <DeductionsPieChart data={pieData} />
       </div>
     </div>
@@ -300,11 +300,11 @@ function TaxSummaryCard({
       style={{ borderColor: highlight ? 'var(--series-1)' : 'var(--border)', background: 'var(--surface-1)' }}
     >
       <h4 className="text-sm font-medium">{title}</h4>
-      <TaxRow label="Taxable income" value={formatCurrency(taxableIncome)} />
-      <TaxRow label="Income tax" value={formatCurrency(incomeTax)} />
-      <TaxRow label="Medicare levy (2%)" value={formatCurrency(medicare)} />
+      <TaxRow label="Taxable Income" value={formatCurrency(taxableIncome)} />
+      <TaxRow label="Income Tax" value={formatCurrency(incomeTax)} />
+      <TaxRow label="Medicare Levy (2%)" value={formatCurrency(medicare)} />
       <div className="pt-2 mt-1" style={{ borderTop: '1px solid var(--border)' }}>
-        <TaxRow label="Total estimated tax" value={formatCurrency(total)} bold />
+        <TaxRow label="Total Estimated Tax" value={formatCurrency(total)} bold />
       </div>
     </div>
   );
