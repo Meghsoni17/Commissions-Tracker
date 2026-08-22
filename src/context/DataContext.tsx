@@ -1,8 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { v4 as uuid } from 'uuid';
 import type { AppData, Deduction, MonthlyGoal, Role, WeekEntry } from '../types';
-import { loadData, saveData } from '../lib/storage';
-import { buildSeedData } from '../lib/seedData';
+import { saveVault } from '../lib/vault';
 
 interface DataContextValue {
   roles: Role[];
@@ -28,18 +27,22 @@ const DataContext = createContext<DataContextValue | null>(null);
 
 const NEXT_COLOR_SLOTS = [1, 2, 3, 4, 5, 6, 7, 8];
 
-function loadInitial(): AppData {
-  const stored = loadData();
-  if (stored) return stored;
-  return { ...buildSeedData(), isSample: true };
-}
-
-export function DataProvider({ children }: { children: ReactNode }) {
-  const [data, setData] = useState<AppData>(loadInitial);
+export function DataProvider({
+  cryptoKey,
+  initialData,
+  children,
+}: {
+  cryptoKey: CryptoKey;
+  initialData: AppData;
+  children: ReactNode;
+}) {
+  const [data, setData] = useState<AppData>(initialData);
 
   useEffect(() => {
-    saveData(data);
-  }, [data]);
+    saveVault(cryptoKey, data).catch((err) => {
+      console.error('Failed to save encrypted data:', err);
+    });
+  }, [cryptoKey, data]);
 
   const mutate = useCallback((fn: (prev: AppData) => AppData) => {
     setData((prev) => ({ ...fn(prev), isSample: false }));

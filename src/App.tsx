@@ -7,6 +7,10 @@ import { Dashboard } from './pages/Dashboard';
 import { EntriesPage } from './pages/EntriesPage';
 import { RolesPage } from './pages/RolesPage';
 import { TaxPage } from './pages/TaxPage';
+import { useAutoLock } from './hooks/useAutoLock';
+import type { VaultSession } from './lib/vault';
+
+const AUTO_LOCK_MS = 5 * 60 * 1000;
 
 function SampleDataBanner() {
   const { isSampleData, clearSampleData } = useData();
@@ -42,16 +46,18 @@ function AppShell() {
 }
 
 function App() {
-  const [unlocked, setUnlocked] = useState(false);
+  const [session, setSession] = useState<VaultSession | null>(null);
+
+  useAutoLock(session !== null, () => setSession(null), AUTO_LOCK_MS);
 
   return (
     <ThemeProvider>
-      {unlocked ? (
-        <DataProvider>
+      {session ? (
+        <DataProvider cryptoKey={session.key} initialData={session.data}>
           <AppShell />
         </DataProvider>
       ) : (
-        <LockScreen onUnlock={() => setUnlocked(true)} />
+        <LockScreen onUnlock={setSession} />
       )}
     </ThemeProvider>
   );
