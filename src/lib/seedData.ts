@@ -87,5 +87,20 @@ export function buildSeedData(): AppData {
     },
   ];
 
-  return { roles, entries, monthlyGoals, deductions };
+  const superContributions: AppData['superContributions'] = [
+    {
+      id: 'seed-super-1',
+      date: weeks[Math.max(0, weeks.length - 5)],
+      amount: 1200,
+      notes: 'AustralianSuper',
+    },
+    {
+      id: 'seed-super-2',
+      date: weeks[0],
+      amount: 900,
+      notes: 'AustralianSuper',
+    },
+  ];
+
+  return { roles, entries, monthlyGoals, deductions, superContributions };
 }

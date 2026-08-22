@@ -1,13 +1,14 @@
 import type { ReactNode } from 'react';
 import { ThemeToggle } from './ThemeToggle';
 
-export type Tab = 'dashboard' | 'entries' | 'roles' | 'tax';
+export type Tab = 'dashboard' | 'entries' | 'roles' | 'tax' | 'super';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'dashboard', label: 'Dashboard' },
   { key: 'entries', label: 'Entries' },
   { key: 'roles', label: 'Roles' },
   { key: 'tax', label: 'Tax Estimate' },
+  { key: 'super', label: 'Super' },
 ];
 
 export function Layout({

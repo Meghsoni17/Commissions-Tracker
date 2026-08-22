@@ -1,4 +1,4 @@
-import type { AppData, Deduction } from '../types';
+import type { AppData, Deduction, SuperContribution } from '../types';
 import { todayISO } from './dateUtils';
 
 /** Pre-encryption plaintext key from before the encrypted vault existed. Only read once, to migrate. */
@@ -20,6 +20,16 @@ function normalizeDeduction(d: Partial<Deduction> & { id: string }): Deduction {
   };
 }
 
+/** Backfills fields for contributions saved before this feature existed. */
+function normalizeSuperContribution(s: Partial<SuperContribution> & { id: string }): SuperContribution {
+  return {
+    id: s.id,
+    date: s.date ?? todayISO(),
+    amount: typeof s.amount === 'number' ? s.amount : Number(s.amount) || 0,
+    notes: s.notes,
+  };
+}
+
 /** Validates and backfills a parsed blob (decrypted, or legacy plaintext) into a well-formed AppData. */
 export function normalizeAppData(parsed: unknown): AppData | null {
   if (!parsed || typeof parsed !== 'object') return null;
@@ -30,6 +40,7 @@ export function normalizeAppData(parsed: unknown): AppData | null {
     entries: p.entries,
     monthlyGoals: Array.isArray(p.monthlyGoals) ? p.monthlyGoals : [],
     deductions: Array.isArray(p.deductions) ? p.deductions.map(normalizeDeduction) : [],
+    superContributions: Array.isArray(p.superContributions) ? p.superContributions.map(normalizeSuperContribution) : [],
     isSample: p.isSample,
   };
 }

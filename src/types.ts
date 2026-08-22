@@ -62,10 +62,18 @@ export interface Deduction {
   createdAt: string; // ISO date the line item was logged
 }
 
+export interface SuperContribution {
+  id: string;
+  date: string; // ISO date the contribution was made
+  amount: number;
+  notes?: string; // e.g. which fund
+}
+
 export interface AppData {
   roles: Role[];
   entries: WeekEntry[];
   monthlyGoals: MonthlyGoal[];
   deductions: Deduction[];
+  superContributions: SuperContribution[];
   isSample?: boolean;
 }

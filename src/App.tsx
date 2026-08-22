@@ -7,6 +7,7 @@ import { Dashboard } from './pages/Dashboard';
 import { EntriesPage } from './pages/EntriesPage';
 import { RolesPage } from './pages/RolesPage';
 import { TaxPage } from './pages/TaxPage';
+import { SuperPage } from './pages/SuperPage';
 import { useAutoLock } from './hooks/useAutoLock';
 import type { VaultSession } from './lib/vault';
 
@@ -41,6 +42,7 @@ function AppShell() {
       {tab === 'entries' && <EntriesPage />}
       {tab === 'roles' && <RolesPage />}
       {tab === 'tax' && <TaxPage />}
+      {tab === 'super' && <SuperPage />}
     </Layout>
   );
 }

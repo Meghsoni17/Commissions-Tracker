@@ -22,6 +22,7 @@ import {
   recentWeeks,
   weekStartISO,
 } from '../lib/dateUtils';
+import { currentFYKey, fyLabel, isISODateInFY } from '../lib/financialYear';
 import { subWeeks, subMonths } from 'date-fns';
 import { CommissionTrendChart, type TrendPoint } from '../components/charts/CommissionTrendChart';
 import { RateComparisonChart, type RatePoint } from '../components/charts/RateComparisonChart';
@@ -48,7 +49,7 @@ function DeltaLabel({ current, previous, periodLabel }: { current: number; previ
 }
 
 export function Dashboard() {
-  const { roles, entries } = useData();
+  const { roles, entries, superContributions } = useData();
   const activeRoles = roles.filter((r) => !r.archived);
   const [trendMode, setTrendMode] = useState<'week' | 'month'>('week');
 
@@ -56,6 +57,12 @@ export function Dashboard() {
   const lastWeek = weekStartISO(subWeeks(new Date(), 1));
   const thisMonth = currentMonthKey();
   const lastMonth = monthKey(weekStartISO(subMonths(new Date(), 1)));
+  const thisFY = currentFYKey();
+
+  const superThisFY = useMemo(
+    () => superContributions.filter((s) => isISODateInFY(s.date, thisFY)).reduce((sum, s) => sum + s.amount, 0),
+    [superContributions, thisFY],
+  );
 
   const byWeek = useMemo(() => groupByWeek(entries), [entries]);
   const byMonth = useMemo(() => groupByMonth(entries), [entries]);
@@ -121,7 +128,7 @@ export function Dashboard() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <StatTile
           label="This Week's Commission"
           value={formatCurrency(thisWeekTotals.commission)}
@@ -134,6 +141,7 @@ export function Dashboard() {
         />
         <StatTile label="All-Time Show Rate" value={formatPercent(allTimeRates.showRate)} sublabel={`${allTime.showed} of ${allTime.booked} booked calls`} />
         <StatTile label="All-Time Close Rate" value={formatPercent(allTimeRates.closeRate)} sublabel={`${allTime.closed} of ${allTime.showed} shown calls`} />
+        <StatTile label="Super Contributed" value={formatCurrency(superThisFY)} sublabel={fyLabel(thisFY)} />
       </div>
 
       <MonthlyGoalSection />

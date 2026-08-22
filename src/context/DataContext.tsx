@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { v4 as uuid } from 'uuid';
-import type { AppData, Deduction, MonthlyGoal, Role, WeekEntry } from '../types';
+import type { AppData, Deduction, MonthlyGoal, Role, SuperContribution, WeekEntry } from '../types';
 import { saveVault } from '../lib/vault';
 
 interface DataContextValue {
@@ -8,6 +8,7 @@ interface DataContextValue {
   entries: WeekEntry[];
   monthlyGoals: MonthlyGoal[];
   deductions: Deduction[];
+  superContributions: SuperContribution[];
   isSampleData: boolean;
   addRole: (name: string) => void;
   renameRole: (id: string, name: string) => void;
@@ -20,6 +21,9 @@ interface DataContextValue {
   addDeduction: (deduction: Omit<Deduction, 'id'>) => void;
   updateDeduction: (id: string, deduction: Omit<Deduction, 'id'>) => void;
   deleteDeduction: (id: string) => void;
+  addSuperContribution: (contribution: Omit<SuperContribution, 'id'>) => void;
+  updateSuperContribution: (id: string, contribution: Omit<SuperContribution, 'id'>) => void;
+  deleteSuperContribution: (id: string) => void;
   clearSampleData: () => void;
 }
 
@@ -138,8 +142,32 @@ export function DataProvider({
     [mutate],
   );
 
+  const addSuperContribution = useCallback(
+    (contribution: Omit<SuperContribution, 'id'>) => {
+      mutate((prev) => ({ ...prev, superContributions: [...prev.superContributions, { ...contribution, id: uuid() }] }));
+    },
+    [mutate],
+  );
+
+  const updateSuperContribution = useCallback(
+    (id: string, contribution: Omit<SuperContribution, 'id'>) => {
+      mutate((prev) => ({
+        ...prev,
+        superContributions: prev.superContributions.map((s) => (s.id === id ? { ...contribution, id } : s)),
+      }));
+    },
+    [mutate],
+  );
+
+  const deleteSuperContribution = useCallback(
+    (id: string) => {
+      mutate((prev) => ({ ...prev, superContributions: prev.superContributions.filter((s) => s.id !== id) }));
+    },
+    [mutate],
+  );
+
   const clearSampleData = useCallback(() => {
-    setData({ roles: [], entries: [], monthlyGoals: [], deductions: [], isSample: false });
+    setData({ roles: [], entries: [], monthlyGoals: [], deductions: [], superContributions: [], isSample: false });
   }, []);
 
   const value = useMemo<DataContextValue>(
@@ -148,6 +176,7 @@ export function DataProvider({
       entries: data.entries,
       monthlyGoals: data.monthlyGoals,
       deductions: data.deductions,
+      superContributions: data.superContributions,
       isSampleData: data.isSample === true,
       addRole,
       renameRole,
@@ -160,6 +189,9 @@ export function DataProvider({
       addDeduction,
       updateDeduction,
       deleteDeduction,
+      addSuperContribution,
+      updateSuperContribution,
+      deleteSuperContribution,
       clearSampleData,
     }),
     [
@@ -175,6 +207,9 @@ export function DataProvider({
       addDeduction,
       updateDeduction,
       deleteDeduction,
+      addSuperContribution,
+      updateSuperContribution,
+      deleteSuperContribution,
       clearSampleData,
     ],
   );
