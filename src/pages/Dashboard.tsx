@@ -25,6 +25,7 @@ import {
 import { subWeeks, subMonths } from 'date-fns';
 import { CommissionTrendChart, type TrendPoint } from '../components/charts/CommissionTrendChart';
 import { RateComparisonChart, type RatePoint } from '../components/charts/RateComparisonChart';
+import { MonthlyGoalSection } from '../components/MonthlyGoalSection';
 
 function delta(current: number, previous: number): { pct: number | null; up: boolean } {
   if (previous === 0) return { pct: current === 0 ? 0 : null, up: current >= previous };
@@ -134,6 +135,8 @@ export function Dashboard() {
         <StatTile label="All-time show rate" value={formatPercent(allTimeRates.showRate)} sublabel={`${allTime.showed} of ${allTime.booked} booked calls`} />
         <StatTile label="All-time close rate" value={formatPercent(allTimeRates.closeRate)} sublabel={`${allTime.closed} of ${allTime.showed} shown calls`} />
       </div>
+
+      <MonthlyGoalSection />
 
       <div className="rounded-xl border p-4" style={{ borderColor: 'var(--border)', background: 'var(--surface-1)' }}>
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">

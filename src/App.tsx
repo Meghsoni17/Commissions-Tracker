@@ -6,6 +6,7 @@ import { LockScreen } from './components/LockScreen';
 import { Dashboard } from './pages/Dashboard';
 import { EntriesPage } from './pages/EntriesPage';
 import { RolesPage } from './pages/RolesPage';
+import { TaxPage } from './pages/TaxPage';
 
 function SampleDataBanner() {
   const { isSampleData, clearSampleData } = useData();
@@ -35,6 +36,7 @@ function AppShell() {
       {tab === 'dashboard' && <Dashboard />}
       {tab === 'entries' && <EntriesPage />}
       {tab === 'roles' && <RolesPage />}
+      {tab === 'tax' && <TaxPage />}
     </Layout>
   );
 }

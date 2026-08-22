@@ -1,12 +1,14 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { v4 as uuid } from 'uuid';
-import type { AppData, Role, WeekEntry } from '../types';
+import type { AppData, Deduction, MonthlyGoal, Role, WeekEntry } from '../types';
 import { loadData, saveData } from '../lib/storage';
 import { buildSeedData } from '../lib/seedData';
 
 interface DataContextValue {
   roles: Role[];
   entries: WeekEntry[];
+  monthlyGoals: MonthlyGoal[];
+  deductions: Deduction[];
   isSampleData: boolean;
   addRole: (name: string) => void;
   renameRole: (id: string, name: string) => void;
@@ -15,6 +17,10 @@ interface DataContextValue {
   addEntry: (entry: Omit<WeekEntry, 'id'>) => void;
   updateEntry: (id: string, entry: Omit<WeekEntry, 'id'>) => void;
   deleteEntry: (id: string) => void;
+  setMonthlyGoal: (monthKey: string, amount: number) => void;
+  addDeduction: (deduction: Omit<Deduction, 'id'>) => void;
+  updateDeduction: (id: string, deduction: Omit<Deduction, 'id'>) => void;
+  deleteDeduction: (id: string) => void;
   clearSampleData: () => void;
 }
 
@@ -93,14 +99,52 @@ export function DataProvider({ children }: { children: ReactNode }) {
     [mutate],
   );
 
+  const setMonthlyGoal = useCallback(
+    (monthKey: string, amount: number) => {
+      mutate((prev) => {
+        const monthlyGoals =
+          amount > 0
+            ? prev.monthlyGoals.some((g) => g.monthKey === monthKey)
+              ? prev.monthlyGoals.map((g) => (g.monthKey === monthKey ? { ...g, amount } : g))
+              : [...prev.monthlyGoals, { monthKey, amount }]
+            : prev.monthlyGoals.filter((g) => g.monthKey !== monthKey);
+        return { ...prev, monthlyGoals };
+      });
+    },
+    [mutate],
+  );
+
+  const addDeduction = useCallback(
+    (deduction: Omit<Deduction, 'id'>) => {
+      mutate((prev) => ({ ...prev, deductions: [...prev.deductions, { ...deduction, id: uuid() }] }));
+    },
+    [mutate],
+  );
+
+  const updateDeduction = useCallback(
+    (id: string, deduction: Omit<Deduction, 'id'>) => {
+      mutate((prev) => ({ ...prev, deductions: prev.deductions.map((d) => (d.id === id ? { ...deduction, id } : d)) }));
+    },
+    [mutate],
+  );
+
+  const deleteDeduction = useCallback(
+    (id: string) => {
+      mutate((prev) => ({ ...prev, deductions: prev.deductions.filter((d) => d.id !== id) }));
+    },
+    [mutate],
+  );
+
   const clearSampleData = useCallback(() => {
-    setData({ roles: [], entries: [], isSample: false });
+    setData({ roles: [], entries: [], monthlyGoals: [], deductions: [], isSample: false });
   }, []);
 
   const value = useMemo<DataContextValue>(
     () => ({
       roles: data.roles,
       entries: data.entries,
+      monthlyGoals: data.monthlyGoals,
+      deductions: data.deductions,
       isSampleData: data.isSample === true,
       addRole,
       renameRole,
@@ -109,9 +153,27 @@ export function DataProvider({ children }: { children: ReactNode }) {
       addEntry,
       updateEntry,
       deleteEntry,
+      setMonthlyGoal,
+      addDeduction,
+      updateDeduction,
+      deleteDeduction,
       clearSampleData,
     }),
-    [data, addRole, renameRole, setRoleColor, archiveRole, addEntry, updateEntry, deleteEntry, clearSampleData],
+    [
+      data,
+      addRole,
+      renameRole,
+      setRoleColor,
+      archiveRole,
+      addEntry,
+      updateEntry,
+      deleteEntry,
+      setMonthlyGoal,
+      addDeduction,
+      updateDeduction,
+      deleteDeduction,
+      clearSampleData,
+    ],
   );
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
