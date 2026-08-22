@@ -26,7 +26,7 @@ export function Layout({
       >
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-6 min-w-0">
-            <h1 className="text-lg font-semibold shrink-0">Commission Tracker</h1>
+            <h1 className="text-lg font-semibold shrink-0">CommTrack</h1>
             <nav className="flex items-center gap-1">
               {TABS.map((tab) => (
                 <button

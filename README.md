@@ -1,4 +1,4 @@
-# Commission Tracker
+# CommTrack
 
 A personal dashboard for tracking sales commissions week to week and month to
 month, across multiple roles.
