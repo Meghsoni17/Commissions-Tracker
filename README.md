@@ -41,3 +41,4 @@ GitHub Pages, etc.) — there is no backend.
 
 React + TypeScript + Vite, Tailwind CSS for styling, and Recharts for the
 graphs.
+Last updated: Sat 22 Aug 2026 19:22:08 AEST
