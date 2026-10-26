@@ -106,7 +106,7 @@ export function LockScreen({ onUnlock }: { onUnlock: (session: VaultSession) => 
         className="w-full max-w-sm rounded-2xl border p-8 text-center"
         style={{ borderColor: 'var(--border)', background: 'var(--surface-1)' }}
       >
-        <h1 className="text-lg font-semibold mb-1">TopSalesRep</h1>
+        <h1 className="text-lg font-semibold mb-1">CommTrack</h1>
 
         {mode === 'unlock' && (
           <>
@@ -142,7 +142,7 @@ export function LockScreen({ onUnlock }: { onUnlock: (session: VaultSession) => 
         {mode === 'migrate' && (
           <>
             <p className="text-sm mb-6" style={{ color: 'var(--text-secondary)' }}>
-              TopSalesRep now encrypts your data. Enter your current PIN to switch to encrypted storage.
+              CommTrack now encrypts your data. Enter your current PIN to switch to encrypted storage.
             </p>
             <PinInput key={attempt} onComplete={handleMigrateAttempt} disabled={busy} />
             <div className="h-5 mt-4">
