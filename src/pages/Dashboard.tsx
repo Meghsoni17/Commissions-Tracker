@@ -18,12 +18,14 @@ import {
   formatMonthLabelShort,
   formatWeekLabelShort,
   monthKey,
+  previousMonthKey,
   recentMonths,
   recentWeeks,
   weekStartISO,
+  weekStartOf,
 } from '../lib/dateUtils';
 import { currentFYKey, fyLabel, isISODateInFY } from '../lib/financialYear';
-import { subWeeks, subMonths } from 'date-fns';
+import { subWeeks } from 'date-fns';
 import { CommissionTrendChart, type TrendPoint } from '../components/charts/CommissionTrendChart';
 import { RateComparisonChart, type RatePoint } from '../components/charts/RateComparisonChart';
 import { MonthlyGoalSection } from '../components/MonthlyGoalSection';
@@ -58,7 +60,7 @@ export function Dashboard() {
   const thisWeek = weekStartISO();
   const lastWeek = weekStartISO(subWeeks(new Date(), 1));
   const thisMonth = currentMonthKey();
-  const lastMonth = monthKey(weekStartISO(subMonths(new Date(), 1)));
+  const lastMonth = previousMonthKey();
   const thisFY = currentFYKey();
 
   const superThisFY = useMemo(
@@ -84,7 +86,7 @@ export function Dashboard() {
   const trendData = useMemo<TrendPoint[]>(() => {
     if (trendMode === 'week') {
       const weeks = recentWeeks(8);
-      const grouped = groupByPeriodAndRole(entries, (e) => e.weekStart);
+      const grouped = groupByPeriodAndRole(entries, weekStartOf);
       return weeks.map((w) => {
         const inner = grouped.get(w);
         const point: TrendPoint = { period: formatWeekLabelShort(w), fullLabel: `Week of ${formatWeekLabelShort(w)}`, total: 0 };
@@ -97,7 +99,7 @@ export function Dashboard() {
       });
     }
     const months = recentMonths(6);
-    const grouped = groupByPeriodAndRole(entries, (e) => monthKey(e.weekStart));
+    const grouped = groupByPeriodAndRole(entries, monthKey);
     return months.map((m) => {
       const inner = grouped.get(m);
       const point: TrendPoint = { period: formatMonthLabelShort(m), fullLabel: formatMonthLabel(m), total: 0 };

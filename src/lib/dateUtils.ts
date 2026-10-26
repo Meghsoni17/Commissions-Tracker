@@ -1,4 +1,5 @@
 import {
+  addDays,
   startOfWeek,
   endOfWeek,
   format,
@@ -14,6 +15,11 @@ export function weekStartISO(date: Date = new Date()): string {
   return format(startOfWeek(date, { weekStartsOn: 1 }), ISO_DATE);
 }
 
+/** Monday of the week containing the ISO date `iso`. */
+export function weekStartOf(iso: string): string {
+  return weekStartISO(parseISO(iso));
+}
+
 export function weekEndISO(weekStart: string): string {
   return format(endOfWeek(parseISO(weekStart), { weekStartsOn: 1 }), ISO_DATE);
 }
@@ -27,16 +33,54 @@ export function formatWeekLabel(weekStart: string): string {
   return `${startFmt}–${endFmt}`;
 }
 
+/** The seven ISO dates (Monday to Sunday) of the week starting `weekStart`. */
+export function weekDays(weekStart: string): string[] {
+  const start = parseISO(weekStart);
+  return Array.from({ length: 7 }, (_, i) => format(addDays(start, i), ISO_DATE));
+}
+
+export interface WeekMonthSegment {
+  monthKey: string; // yyyy-MM
+  startISO: string;
+  endISO: string;
+  label: string; // e.g. "28–30 Sep", or "30 Sep" for a single day
+}
+
+/** The week split at month boundaries: one segment normally, two when the week straddles a month change. */
+export function weekMonthSegments(weekStart: string): WeekMonthSegment[] {
+  const segments: WeekMonthSegment[] = [];
+  for (const day of weekDays(weekStart)) {
+    const key = monthKey(day);
+    const last = segments[segments.length - 1];
+    if (last && last.monthKey === key) last.endISO = day;
+    else segments.push({ monthKey: key, startISO: day, endISO: day, label: '' });
+  }
+  for (const s of segments) {
+    const start = parseISO(s.startISO);
+    s.label = s.startISO === s.endISO ? format(start, 'd MMM') : `${format(start, 'd')}–${format(parseISO(s.endISO), 'd MMM')}`;
+  }
+  return segments;
+}
+
+export function weekStraddlesMonths(weekStart: string): boolean {
+  return weekMonthSegments(weekStart).length > 1;
+}
+
 export function formatWeekLabelShort(weekStart: string): string {
   return format(parseISO(weekStart), 'MMM d');
 }
 
-export function monthKey(weekStart: string): string {
-  return format(startOfMonth(parseISO(weekStart)), 'yyyy-MM');
+/** yyyy-MM month key of an ISO date (a week start, or an exact day). */
+export function monthKey(iso: string): string {
+  return format(startOfMonth(parseISO(iso)), 'yyyy-MM');
 }
 
 export function currentMonthKey(): string {
   return format(startOfMonth(new Date()), 'yyyy-MM');
+}
+
+export function previousMonthKey(): string {
+  return format(subMonths(startOfMonth(new Date()), 1), 'yyyy-MM');
 }
 
 export function formatMonthLabel(key: string): string {
@@ -73,4 +117,9 @@ export function todayISO(): string {
 
 export function formatShortDate(iso: string): string {
   return format(parseISO(iso), 'd MMM yyyy');
+}
+
+/** e.g. "Mon 28 Sep" */
+export function formatDayLabel(iso: string): string {
+  return format(parseISO(iso), 'EEE d MMM');
 }

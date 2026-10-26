@@ -1,5 +1,5 @@
-import type { WeekEntry } from '../types';
-import { monthKey } from './dateUtils';
+import type { DayAmount, WeekEntry } from '../types';
+import { monthKey, weekEndISO } from './dateUtils';
 
 export interface Totals {
   booked: number;
@@ -11,6 +11,43 @@ export interface Totals {
 export interface RateTotals extends Totals {
   showRate: number | null; // showed / booked
   closeRate: number | null; // closed / showed
+}
+
+/** Money in whole cents, so day amounts like 10.99 add up exactly. */
+export function toCents(n: number): number {
+  return Math.round(n * 100);
+}
+
+/** True when a breakdown covers only days of the entry's week and adds up exactly to its commission. */
+export function isValidDayBreakdown(weekStart: string, commission: number, breakdown: DayAmount[] | undefined): boolean {
+  if (!breakdown || breakdown.length === 0) return false;
+  const weekEnd = weekEndISO(weekStart);
+  if (breakdown.some((d) => d.date < weekStart || d.date > weekEnd || d.amount < 0)) return false;
+  return breakdown.reduce((sum, d) => sum + toCents(d.amount), 0) === toCents(commission);
+}
+
+export function hasDayBreakdown(e: WeekEntry): boolean {
+  return isValidDayBreakdown(e.weekStart, e.commission, e.dayBreakdown);
+}
+
+/**
+ * Where an entry's commission is counted: on each day of a valid day breakdown, otherwise (as
+ * always) entirely on the week's Monday. Booked/showed/closed are weekly and stay on the Monday.
+ */
+export function commissionAllocations(e: WeekEntry): DayAmount[] {
+  if (hasDayBreakdown(e)) return (e.dayBreakdown as DayAmount[]).filter((d) => d.amount !== 0);
+  return [{ date: e.weekStart, amount: e.commission }];
+}
+
+/** Commission counted between two ISO dates inclusive, using each entry's day breakdown. */
+export function commissionInRange(entries: WeekEntry[], startISO: string, endISO: string): number {
+  let total = 0;
+  for (const e of entries) {
+    for (const a of commissionAllocations(e)) {
+      if (a.date >= startISO && a.date <= endISO) total += a.amount;
+    }
+  }
+  return total;
 }
 
 export function emptyTotals(): Totals {
@@ -78,38 +115,36 @@ export function groupByWeek(entries: WeekEntry[]): Map<string, Totals> {
   return map;
 }
 
+/** Month key -> Totals. Commission follows each entry's day breakdown; call counts follow its week's Monday. */
 export function groupByMonth(entries: WeekEntry[]): Map<string, Totals> {
   const map = new Map<string, Totals>();
+  const add = (key: string, partial: Partial<Totals>) => {
+    map.set(key, addTotals(map.get(key) ?? emptyTotals(), { ...emptyTotals(), ...partial }));
+  };
   for (const e of entries) {
-    const key = monthKey(e.weekStart);
-    const cur = map.get(key) ?? emptyTotals();
-    map.set(key, {
-      booked: cur.booked + e.booked,
-      showed: cur.showed + e.showed,
-      closed: cur.closed + e.closed,
-      commission: cur.commission + e.commission,
-    });
+    add(monthKey(e.weekStart), { booked: e.booked, showed: e.showed, closed: e.closed });
+    for (const a of commissionAllocations(e)) add(monthKey(a.date), { commission: a.amount });
   }
   return map;
 }
 
-/** weekStart|monthKey -> roleId -> Totals, for stacked-by-role charts. */
+/**
+ * period -> roleId -> Totals, for stacked-by-role charts. `periodOf` maps an ISO date to its period
+ * (week start or month key); commission is grouped by its day breakdown, call counts by the week's Monday.
+ */
 export function groupByPeriodAndRole(
   entries: WeekEntry[],
-  periodOf: (e: WeekEntry) => string,
+  periodOf: (iso: string) => string,
 ): Map<string, Map<string, Totals>> {
   const map = new Map<string, Map<string, Totals>>();
-  for (const e of entries) {
-    const period = periodOf(e);
+  const add = (period: string, roleId: string, partial: Partial<Totals>) => {
     const inner = map.get(period) ?? new Map<string, Totals>();
-    const cur = inner.get(e.roleId) ?? emptyTotals();
-    inner.set(e.roleId, {
-      booked: cur.booked + e.booked,
-      showed: cur.showed + e.showed,
-      closed: cur.closed + e.closed,
-      commission: cur.commission + e.commission,
-    });
+    inner.set(roleId, addTotals(inner.get(roleId) ?? emptyTotals(), { ...emptyTotals(), ...partial }));
     map.set(period, inner);
+  };
+  for (const e of entries) {
+    add(periodOf(e.weekStart), e.roleId, { booked: e.booked, showed: e.showed, closed: e.closed });
+    for (const a of commissionAllocations(e)) add(periodOf(a.date), e.roleId, { commission: a.amount });
   }
   return map;
 }

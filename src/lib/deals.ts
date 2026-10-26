@@ -17,6 +17,8 @@ export function dealToEntry(deal: Pick<Deal, 'roleId' | 'saleDate' | 'cashCollec
     closed: 1,
     commission: deal.cashCollectedOnCall,
     notes: `Auto-added from deal: ${deal.clientName}`,
+    // The sale date is known exactly, so the commission counts in the sale's month even mid-week.
+    dayBreakdown: deal.cashCollectedOnCall > 0 ? [{ date: deal.saleDate, amount: deal.cashCollectedOnCall }] : undefined,
   };
 }
 

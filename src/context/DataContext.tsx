@@ -17,7 +17,7 @@ interface DataContextValue {
   renameRole: (id: string, name: string) => void;
   setRoleColor: (id: string, colorSlot: number) => void;
   archiveRole: (id: string, archived: boolean) => void;
-  addEntry: (entry: Omit<WeekEntry, 'id'>) => void;
+  addEntry: (entry: Omit<WeekEntry, 'id'>) => string;
   updateEntry: (id: string, entry: Omit<WeekEntry, 'id'>) => void;
   deleteEntry: (id: string) => void;
   setMonthlyGoal: (monthKey: string, amount: number) => void;
@@ -94,7 +94,9 @@ export function DataProvider({
 
   const addEntry = useCallback(
     (entry: Omit<WeekEntry, 'id'>) => {
-      mutate((prev) => ({ ...prev, entries: [...prev.entries, { ...entry, id: uuid() }] }));
+      const id = uuid();
+      mutate((prev) => ({ ...prev, entries: [...prev.entries, { ...entry, id }] }));
+      return id;
     },
     [mutate],
   );

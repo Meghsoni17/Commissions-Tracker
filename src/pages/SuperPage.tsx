@@ -4,9 +4,9 @@ import { useData } from '../context/DataContext';
 import type { SuperContribution } from '../types';
 import { StatTile } from '../components/StatTile';
 import { ProgressBar } from '../components/ProgressBar';
-import { formatCurrencyExact, formatPercent, sumEntries } from '../lib/calculations';
+import { commissionAllocations, commissionInRange, formatCurrencyExact, formatPercent } from '../lib/calculations';
 import { formatShortDate, todayISO } from '../lib/dateUtils';
-import { currentFYKey, fyKeyForISODate, fyKeyOptions, fyLabel, isISODateInFY } from '../lib/financialYear';
+import { currentFYKey, fyDateRange, fyKeyForISODate, fyKeyOptions, fyLabel, isISODateInFY } from '../lib/financialYear';
 import { SUPER_GUARANTEE_RATE, suggestedSuperContribution } from '../lib/super';
 
 interface ContributionFormState {
@@ -28,14 +28,17 @@ export function SuperPage() {
 
   const fyOptions = useMemo(() => {
     const known = [
-      ...entries.map((e) => fyKeyForISODate(e.weekStart)),
+      ...entries.flatMap((e) => commissionAllocations(e).map((a) => fyKeyForISODate(a.date))),
       ...superContributions.map((s) => fyKeyForISODate(s.date)),
     ];
     return fyKeyOptions(known);
   }, [entries, superContributions]);
 
-  const fyEntries = useMemo(() => entries.filter((e) => isISODateInFY(e.weekStart, selectedFY)), [entries, selectedFY]);
-  const grossIncome = useMemo(() => sumEntries(fyEntries).commission, [fyEntries]);
+  // Uses each entry's day breakdown, so a week crossing 30 June / 1 July is split between the two FYs.
+  const grossIncome = useMemo(() => {
+    const { startISO, endISO } = fyDateRange(selectedFY);
+    return commissionInRange(entries, startISO, endISO);
+  }, [entries, selectedFY]);
   const suggested = useMemo(() => suggestedSuperContribution(grossIncome), [grossIncome]);
 
   const fyContributions = useMemo(

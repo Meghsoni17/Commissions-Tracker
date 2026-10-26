@@ -5,9 +5,9 @@ import type { Deduction } from '../types';
 import { DEDUCTION_CATEGORIES, PAYMENT_METHODS } from '../types';
 import { StatTile } from '../components/StatTile';
 import { DeductionsPieChart, type DeductionSlice } from '../components/charts/DeductionsPieChart';
-import { formatCurrencyExact, sumEntries } from '../lib/calculations';
+import { commissionAllocations, commissionInRange, formatCurrencyExact } from '../lib/calculations';
 import { formatShortDate, todayISO } from '../lib/dateUtils';
-import { currentFYKey, fyKeyForISODate, fyKeyOptions, fyLabel, isISODateInFY } from '../lib/financialYear';
+import { currentFYKey, fyDateRange, fyKeyForISODate, fyKeyOptions, fyLabel } from '../lib/financialYear';
 import { bracketsForFY, calculateIncomeTax, calculateMedicareLevy, hasBracketsForFY } from '../lib/taxBrackets';
 
 const CUSTOM_CATEGORY = '__custom__';
@@ -44,12 +44,15 @@ export function TaxPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const fyOptions = useMemo(() => {
-    const known = [...entries.map((e) => fyKeyForISODate(e.weekStart)), ...deductions.map((d) => d.financialYear)];
+    const known = [...entries.flatMap((e) => commissionAllocations(e).map((a) => fyKeyForISODate(a.date))), ...deductions.map((d) => d.financialYear)];
     return fyKeyOptions(known);
   }, [entries, deductions]);
 
-  const fyEntries = useMemo(() => entries.filter((e) => isISODateInFY(e.weekStart, selectedFY)), [entries, selectedFY]);
-  const grossIncome = useMemo(() => sumEntries(fyEntries).commission, [fyEntries]);
+  // Uses each entry's day breakdown, so a week crossing 30 June / 1 July is split between the two FYs.
+  const grossIncome = useMemo(() => {
+    const { startISO, endISO } = fyDateRange(selectedFY);
+    return commissionInRange(entries, startISO, endISO);
+  }, [entries, selectedFY]);
 
   const fyDeductions = useMemo(
     () => deductions.filter((d) => d.financialYear === selectedFY).sort((a, b) => b.amount - a.amount),

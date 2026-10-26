@@ -6,6 +6,12 @@ export interface Role {
   createdAt: string; // ISO date
 }
 
+/** One day's share of a week's commission. */
+export interface DayAmount {
+  date: string; // ISO date within the entry's week
+  amount: number;
+}
+
 export interface WeekEntry {
   id: string;
   roleId: string;
@@ -15,6 +21,11 @@ export interface WeekEntry {
   closed: number;
   commission: number;
   notes?: string;
+  /**
+   * Optional: which days the commission was earned on, summing exactly to `commission`. When present
+   * (and valid), monthly/FY figures use these days; without it the whole week counts on its Monday.
+   */
+  dayBreakdown?: DayAmount[];
 }
 
 export interface MonthlyGoal {

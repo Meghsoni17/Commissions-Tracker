@@ -1,4 +1,4 @@
-import type { AppData, Deal, Deduction, PaymentInstallment, SuperContribution } from '../types';
+import type { AppData, Deal, Deduction, PaymentInstallment, SuperContribution, WeekEntry } from '../types';
 import { todayISO } from './dateUtils';
 
 /** Pre-encryption plaintext key from before the encrypted vault existed. Only read once, to migrate. */
@@ -58,6 +58,21 @@ function normalizeDeal(d: Partial<Deal> & { id: string }): Deal {
   };
 }
 
+/**
+ * Entries are kept exactly as saved; the only change is dropping malformed rows from an optional
+ * day breakdown. Entries saved before day breakdowns existed simply have none and keep counting on
+ * their week's Monday, as before.
+ */
+function normalizeEntry(e: WeekEntry): WeekEntry {
+  if (e.dayBreakdown === undefined) return e;
+  const dayBreakdown = Array.isArray(e.dayBreakdown)
+    ? e.dayBreakdown
+        .filter((d) => d && typeof d.date === 'string')
+        .map((d) => ({ date: d.date, amount: typeof d.amount === 'number' ? d.amount : Number(d.amount) || 0 }))
+    : [];
+  return { ...e, dayBreakdown: dayBreakdown.length > 0 ? dayBreakdown : undefined };
+}
+
 /** Validates and backfills a parsed blob (decrypted, or legacy plaintext) into a well-formed AppData. */
 export function normalizeAppData(parsed: unknown): AppData | null {
   if (!parsed || typeof parsed !== 'object') return null;
@@ -65,7 +80,7 @@ export function normalizeAppData(parsed: unknown): AppData | null {
   if (!Array.isArray(p.roles) || !Array.isArray(p.entries)) return null;
   return {
     roles: p.roles,
-    entries: p.entries,
+    entries: p.entries.map(normalizeEntry),
     monthlyGoals: Array.isArray(p.monthlyGoals) ? p.monthlyGoals : [],
     deductions: Array.isArray(p.deductions) ? p.deductions.map(normalizeDeduction) : [],
     superContributions: Array.isArray(p.superContributions) ? p.superContributions.map(normalizeSuperContribution) : [],

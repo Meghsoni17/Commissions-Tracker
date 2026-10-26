@@ -1,9 +1,18 @@
 import { useMemo, useState } from 'react';
+import { parseISO } from 'date-fns';
 import { useData } from '../context/DataContext';
-import type { WeekEntry } from '../types';
-import { weekStartISO, formatWeekLabel } from '../lib/dateUtils';
-import { closeRate, formatCurrency, formatPercent, showRate } from '../lib/calculations';
+import type { DayAmount, WeekEntry } from '../types';
+import { weekStartISO, formatWeekLabel, weekMonthSegments, weekStraddlesMonths } from '../lib/dateUtils';
+import {
+  closeRate,
+  formatCurrency,
+  formatPercent,
+  hasDayBreakdown,
+  isValidDayBreakdown,
+  showRate,
+} from '../lib/calculations';
 import { RoleBadge } from '../components/RoleBadge';
+import { DayBreakdownDialog } from '../components/DayBreakdownDialog';
 
 interface FormState {
   roleId: string;
@@ -13,6 +22,30 @@ interface FormState {
   closed: string;
   commission: string;
   notes: string;
+}
+
+/**
+ * An open day-breakdown step. `entryId` is null when the entry isn't saved yet: a week that
+ * straddles two months is only saved once its breakdown is confirmed.
+ */
+interface BreakdownPrompt {
+  entryId: string | null;
+  payload: Omit<WeekEntry, 'id'>;
+  required: boolean;
+  dismissLabel: string;
+  allowRemove: boolean;
+}
+
+/** "28–30 Sep: $X | 1–4 Oct: $Y" for an entry whose day breakdown spans two months. */
+function monthSplitLabel(entry: WeekEntry): string {
+  return weekMonthSegments(entry.weekStart)
+    .map((seg) => {
+      const amount = (entry.dayBreakdown ?? [])
+        .filter((d) => d.date >= seg.startISO && d.date <= seg.endISO)
+        .reduce((sum, d) => sum + d.amount, 0);
+      return `${seg.label}: ${formatCurrency(amount)}`;
+    })
+    .join(' | ');
 }
 
 function emptyForm(defaultRoleId: string): FormState {
@@ -33,6 +66,7 @@ export function EntriesPage() {
   const [form, setForm] = useState<FormState>(() => emptyForm(activeRoles[0]?.id ?? ''));
   const [editingId, setEditingId] = useState<string | null>(null);
   const [roleFilter, setRoleFilter] = useState<string>('all');
+  const [prompt, setPrompt] = useState<BreakdownPrompt | null>(null);
 
   const roleById = useMemo(() => new Map(roles.map((r) => [r.id, r])), [roles]);
 
@@ -52,21 +86,63 @@ export function EntriesPage() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.roleId) return;
+    const existing = editingId ? entries.find((en) => en.id === editingId) : undefined;
+    const weekStart = weekStartISO(parseISO(form.weekStart));
+    const commission = Number(form.commission) || 0;
+    // An existing breakdown is kept only while it still matches this week and total exactly.
+    const keptBreakdown = isValidDayBreakdown(weekStart, commission, existing?.dayBreakdown)
+      ? existing?.dayBreakdown
+      : undefined;
     const payload: Omit<WeekEntry, 'id'> = {
       roleId: form.roleId,
-      weekStart: weekStartISO(new Date(form.weekStart)),
+      weekStart,
       booked: Number(form.booked) || 0,
       showed: Number(form.showed) || 0,
       closed: Number(form.closed) || 0,
-      commission: Number(form.commission) || 0,
+      commission,
       notes: form.notes.trim() || undefined,
+      dayBreakdown: keptBreakdown,
     };
-    if (editingId) {
-      updateEntry(editingId, payload);
+
+    // A week crossing two months needs its breakdown before it's saved; Back returns to the form.
+    if (commission > 0 && weekStraddlesMonths(weekStart) && !keptBreakdown) {
+      setPrompt({ entryId: editingId, payload, required: true, dismissLabel: 'Back', allowRemove: false });
+      return;
+    }
+
+    const id = editingId ?? addEntry(payload);
+    if (editingId) updateEntry(editingId, payload);
+    resetForm();
+
+    // Single-month week: saved already; offer the optional breakdown for new entries or a changed total.
+    const totalChanged = !existing || existing.commission !== commission || existing.weekStart !== weekStart;
+    if (commission > 0 && !weekStraddlesMonths(weekStart) && totalChanged) {
+      setPrompt({ entryId: id, payload, required: false, dismissLabel: 'Skip', allowRemove: false });
+    }
+  }
+
+  function openBreakdown(entry: WeekEntry) {
+    const { id, ...payload } = entry;
+    const required = weekStraddlesMonths(entry.weekStart);
+    setPrompt({ entryId: id, payload, required, dismissLabel: 'Cancel', allowRemove: !required && hasDayBreakdown(entry) });
+  }
+
+  function confirmBreakdown(dayBreakdown: DayAmount[]) {
+    if (!prompt) return;
+    const payload = { ...prompt.payload, dayBreakdown };
+    if (prompt.entryId) {
+      updateEntry(prompt.entryId, payload);
     } else {
       addEntry(payload);
     }
-    resetForm();
+    if (editingId === prompt.entryId || prompt.entryId === null) resetForm();
+    setPrompt(null);
+  }
+
+  function removeBreakdown() {
+    if (!prompt?.entryId) return;
+    updateEntry(prompt.entryId, { ...prompt.payload, dayBreakdown: undefined });
+    setPrompt(null);
   }
 
   function startEdit(entry: WeekEntry) {
@@ -240,7 +316,31 @@ export function EntriesPage() {
               const cr = closeRate(entry.closed, entry.showed);
               return (
                 <tr key={entry.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                  <td className="px-3 py-2 whitespace-nowrap">{formatWeekLabel(entry.weekStart)}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    {formatWeekLabel(entry.weekStart)}
+                    {entry.commission > 0 && weekStraddlesMonths(entry.weekStart) && (
+                      <div className="text-xs mt-0.5">
+                        {hasDayBreakdown(entry) ? (
+                          <span className="tabular-nums" style={{ color: 'var(--text-muted)' }}>
+                            {monthSplitLabel(entry)}
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => openBreakdown(entry)}
+                            title="This week crosses two months. Until you add a day breakdown, all of it counts in the first month."
+                            className="rounded-md px-2 py-0.5 font-medium cursor-pointer"
+                            style={{
+                              color: 'var(--text-primary)',
+                              background: 'color-mix(in srgb, var(--warning) 18%, transparent)',
+                              border: '1px solid color-mix(in srgb, var(--warning) 60%, transparent)',
+                            }}
+                          >
+                            Add Day Breakdown
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-3 py-2">
                     {role ? <RoleBadge name={role.name} colorSlot={role.colorSlot} /> : '—'}
                   </td>
@@ -254,6 +354,15 @@ export function EntriesPage() {
                     <button onClick={() => startEdit(entry)} className="text-xs mr-2 underline cursor-pointer" style={{ color: 'var(--text-secondary)' }}>
                       Edit
                     </button>
+                    {entry.commission > 0 && (
+                      <button
+                        onClick={() => openBreakdown(entry)}
+                        className="text-xs mr-2 underline cursor-pointer"
+                        style={{ color: 'var(--text-secondary)' }}
+                      >
+                        {hasDayBreakdown(entry) ? 'Edit Days' : 'Days'}
+                      </button>
+                    )}
                     <button
                       onClick={() => deleteEntry(entry.id)}
                       className="text-xs underline cursor-pointer"
@@ -268,6 +377,20 @@ export function EntriesPage() {
           </tbody>
         </table>
       </div>
+
+      {prompt && (
+        <DayBreakdownDialog
+          key={`${prompt.entryId ?? 'new'}-${prompt.payload.weekStart}-${prompt.payload.commission}`}
+          weekStart={prompt.payload.weekStart}
+          total={prompt.payload.commission}
+          initial={prompt.payload.dayBreakdown}
+          required={prompt.required}
+          dismissLabel={prompt.dismissLabel}
+          onConfirm={confirmBreakdown}
+          onDismiss={() => setPrompt(null)}
+          onRemove={prompt.allowRemove ? removeBreakdown : undefined}
+        />
+      )}
     </div>
   );
 }
