@@ -1,4 +1,4 @@
-import type { AppData, Deduction, SuperContribution } from '../types';
+import type { AppData, Deal, Deduction, PaymentInstallment, SuperContribution } from '../types';
 import { todayISO } from './dateUtils';
 
 /** Pre-encryption plaintext key from before the encrypted vault existed. Only read once, to migrate. */
@@ -30,6 +30,34 @@ function normalizeSuperContribution(s: Partial<SuperContribution> & { id: string
   };
 }
 
+/** Backfills fields for a payment installment saved before this feature existed. */
+function normalizeInstallment(i: Partial<PaymentInstallment> & { id: string }): PaymentInstallment {
+  return {
+    id: i.id,
+    dueDate: i.dueDate ?? todayISO(),
+    amount: typeof i.amount === 'number' ? i.amount : Number(i.amount) || 0,
+    paid: i.paid === true,
+    paidDate: i.paidDate,
+  };
+}
+
+/** Backfills fields for a deal saved before this feature existed. */
+function normalizeDeal(d: Partial<Deal> & { id: string }): Deal {
+  return {
+    id: d.id,
+    roleId: d.roleId ?? '',
+    clientName: d.clientName ?? '',
+    saleDate: d.saleDate ?? d.createdAt ?? todayISO(),
+    totalContractValue: typeof d.totalContractValue === 'number' ? d.totalContractValue : Number(d.totalContractValue) || 0,
+    cashCollectedOnCall: typeof d.cashCollectedOnCall === 'number' ? d.cashCollectedOnCall : Number(d.cashCollectedOnCall) || 0,
+    paymentStructure: d.paymentStructure ?? 'Paid in Full',
+    installments: Array.isArray(d.installments) ? d.installments.map(normalizeInstallment) : [],
+    notes: d.notes,
+    createdAt: d.createdAt ?? todayISO(),
+    linkedEntryId: d.linkedEntryId,
+  };
+}
+
 /** Validates and backfills a parsed blob (decrypted, or legacy plaintext) into a well-formed AppData. */
 export function normalizeAppData(parsed: unknown): AppData | null {
   if (!parsed || typeof parsed !== 'object') return null;
@@ -41,6 +69,7 @@ export function normalizeAppData(parsed: unknown): AppData | null {
     monthlyGoals: Array.isArray(p.monthlyGoals) ? p.monthlyGoals : [],
     deductions: Array.isArray(p.deductions) ? p.deductions.map(normalizeDeduction) : [],
     superContributions: Array.isArray(p.superContributions) ? p.superContributions.map(normalizeSuperContribution) : [],
+    deals: Array.isArray(p.deals) ? p.deals.map(normalizeDeal) : [],
     isSample: p.isSample,
   };
 }

@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react';
 import { ThemeToggle } from './ThemeToggle';
 
-export type Tab = 'dashboard' | 'entries' | 'roles' | 'tax' | 'super';
+export type Tab = 'dashboard' | 'entries' | 'deals' | 'roles' | 'tax' | 'super';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'dashboard', label: 'Dashboard' },
   { key: 'entries', label: 'Entries' },
+  { key: 'deals', label: 'Deals' },
   { key: 'roles', label: 'Roles' },
   { key: 'tax', label: 'Tax Estimate' },
   { key: 'super', label: 'Super' },

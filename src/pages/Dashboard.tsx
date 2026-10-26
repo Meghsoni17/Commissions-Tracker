@@ -27,6 +27,8 @@ import { subWeeks, subMonths } from 'date-fns';
 import { CommissionTrendChart, type TrendPoint } from '../components/charts/CommissionTrendChart';
 import { RateComparisonChart, type RatePoint } from '../components/charts/RateComparisonChart';
 import { MonthlyGoalSection } from '../components/MonthlyGoalSection';
+import { UpcomingPayments } from '../components/UpcomingPayments';
+import { upcomingReminders } from '../lib/deals';
 
 function delta(current: number, previous: number): { pct: number | null; up: boolean } {
   if (previous === 0) return { pct: current === 0 ? 0 : null, up: current >= previous };
@@ -49,7 +51,7 @@ function DeltaLabel({ current, previous, periodLabel }: { current: number; previ
 }
 
 export function Dashboard() {
-  const { roles, entries, superContributions } = useData();
+  const { roles, entries, superContributions, deals } = useData();
   const activeRoles = roles.filter((r) => !r.archived);
   const [trendMode, setTrendMode] = useState<'week' | 'month'>('week');
 
@@ -145,6 +147,13 @@ export function Dashboard() {
       </div>
 
       <MonthlyGoalSection />
+
+      {upcomingReminders(deals, 30).length > 0 && (
+        <div className="rounded-xl border p-4" style={{ borderColor: 'var(--border)', background: 'var(--surface-1)' }}>
+          <h3 className="text-sm font-medium mb-3">Upcoming Payments (Next 30 Days)</h3>
+          <UpcomingPayments deals={deals} roles={roles} withinDays={30} limit={5} />
+        </div>
+      )}
 
       <div className="rounded-xl border p-4" style={{ borderColor: 'var(--border)', background: 'var(--surface-1)' }}>
         <div className="flex items-center justify-between mb-3 flex-wrap gap-2">

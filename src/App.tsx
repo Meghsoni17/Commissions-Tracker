@@ -5,6 +5,7 @@ import { Layout, type Tab } from './components/Layout';
 import { LockScreen } from './components/LockScreen';
 import { Dashboard } from './pages/Dashboard';
 import { EntriesPage } from './pages/EntriesPage';
+import { DealsPage } from './pages/DealsPage';
 import { RolesPage } from './pages/RolesPage';
 import { TaxPage } from './pages/TaxPage';
 import { SuperPage } from './pages/SuperPage';
@@ -40,6 +41,7 @@ function AppShell() {
       <SampleDataBanner />
       {tab === 'dashboard' && <Dashboard />}
       {tab === 'entries' && <EntriesPage />}
+      {tab === 'deals' && <DealsPage />}
       {tab === 'roles' && <RolesPage />}
       {tab === 'tax' && <TaxPage />}
       {tab === 'super' && <SuperPage />}

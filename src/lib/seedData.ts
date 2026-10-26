@@ -1,6 +1,8 @@
 import type { AppData } from '../types';
-import { recentWeeks, currentMonthKey, monthKey } from './dateUtils';
+import { recentWeeks, currentMonthKey, monthKey, todayISO } from './dateUtils';
 import { currentFYKey } from './financialYear';
+import { generateInstallments } from './deals';
+import { addDays, format, parseISO } from 'date-fns';
 
 /** Sample data shown on first run so the dashboard isn't empty. Clearly marked so it can be wiped. */
 export function buildSeedData(): AppData {
@@ -102,5 +104,51 @@ export function buildSeedData(): AppData {
     },
   ];
 
-  return { roles, entries, monthlyGoals, deductions, superContributions };
+  const deals: AppData['deals'] = [
+    {
+      id: 'seed-deal-1',
+      roleId: 'role-sales',
+      clientName: 'Northwind Retail',
+      saleDate: weeks[weeks.length - 3],
+      totalContractValue: 12000,
+      cashCollectedOnCall: 4000,
+      paymentStructure: 'Installments',
+      installments: generateInstallments(
+        format(addDays(parseISO(weeks[weeks.length - 3]), 30), 'yyyy-MM-dd'),
+        4,
+        'Monthly',
+        8000,
+      ).map((installment, idx) => (idx === 0 ? { ...installment, paid: true, paidDate: weeks[weeks.length - 1] } : installment)),
+      notes: 'Deposit taken on the close, balance over 4 months.',
+      createdAt: weeks[weeks.length - 3],
+    },
+    {
+      id: 'seed-deal-2',
+      roleId: 'role-sales',
+      clientName: 'Harbor & Co',
+      saleDate: weeks[weeks.length - 1],
+      totalContractValue: 3500,
+      cashCollectedOnCall: 3500,
+      paymentStructure: 'Paid in Full',
+      installments: [],
+      createdAt: weeks[weeks.length - 1],
+    },
+    {
+      id: 'seed-deal-3',
+      roleId: 'role-sales',
+      clientName: 'Beacon Fitness',
+      saleDate: weeks[0],
+      totalContractValue: 6000,
+      cashCollectedOnCall: 1000,
+      paymentStructure: 'Custom Schedule',
+      installments: [
+        { id: 'seed-installment-1', dueDate: todayISO(), amount: 2500, paid: false },
+        { id: 'seed-installment-2', dueDate: format(addDays(new Date(), 21), 'yyyy-MM-dd'), amount: 2500, paid: false },
+      ],
+      notes: 'Custom split negotiated around their cash flow.',
+      createdAt: weeks[0],
+    },
+  ];
+
+  return { roles, entries, monthlyGoals, deductions, superContributions, deals };
 }

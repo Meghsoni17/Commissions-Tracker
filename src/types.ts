@@ -69,11 +69,42 @@ export interface SuperContribution {
   notes?: string; // e.g. which fund
 }
 
+export const PAYMENT_STRUCTURES = ['Paid in Full', 'Installments', 'Custom Schedule'] as const;
+
+export type PaymentStructure = (typeof PAYMENT_STRUCTURES)[number];
+
+export const INSTALLMENT_FREQUENCIES = ['Weekly', 'Fortnightly', 'Monthly'] as const;
+
+export type InstallmentFrequency = (typeof INSTALLMENT_FREQUENCIES)[number];
+
+export interface PaymentInstallment {
+  id: string;
+  dueDate: string; // ISO date the follow-up payment is expected
+  amount: number;
+  paid: boolean;
+  paidDate?: string; // ISO date it was actually collected
+}
+
+export interface Deal {
+  id: string;
+  roleId: string;
+  clientName: string;
+  saleDate: string; // ISO date of the call the deal was closed on
+  totalContractValue: number;
+  cashCollectedOnCall: number; // deposit/cash collected on the closing call itself
+  paymentStructure: PaymentStructure;
+  installments: PaymentInstallment[]; // follow-up payments covering the remaining balance
+  notes?: string;
+  createdAt: string; // ISO date the deal was logged
+  linkedEntryId?: string; // id of the WeekEntry auto-created from this deal's close, for commission totals
+}
+
 export interface AppData {
   roles: Role[];
   entries: WeekEntry[];
   monthlyGoals: MonthlyGoal[];
   deductions: Deduction[];
   superContributions: SuperContribution[];
+  deals: Deal[];
   isSample?: boolean;
 }

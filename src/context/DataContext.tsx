@@ -1,7 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { v4 as uuid } from 'uuid';
-import type { AppData, Deduction, MonthlyGoal, Role, SuperContribution, WeekEntry } from '../types';
+import type { AppData, Deal, Deduction, MonthlyGoal, Role, SuperContribution, WeekEntry } from '../types';
 import { saveVault } from '../lib/vault';
+import { todayISO } from '../lib/dateUtils';
+import { dealToEntry } from '../lib/deals';
 
 interface DataContextValue {
   roles: Role[];
@@ -9,6 +11,7 @@ interface DataContextValue {
   monthlyGoals: MonthlyGoal[];
   deductions: Deduction[];
   superContributions: SuperContribution[];
+  deals: Deal[];
   isSampleData: boolean;
   addRole: (name: string) => void;
   renameRole: (id: string, name: string) => void;
@@ -24,6 +27,10 @@ interface DataContextValue {
   addSuperContribution: (contribution: Omit<SuperContribution, 'id'>) => void;
   updateSuperContribution: (id: string, contribution: Omit<SuperContribution, 'id'>) => void;
   deleteSuperContribution: (id: string) => void;
+  addDeal: (deal: Omit<Deal, 'id'>) => void;
+  updateDeal: (id: string, deal: Omit<Deal, 'id'>) => void;
+  deleteDeal: (id: string) => void;
+  setInstallmentPaid: (dealId: string, installmentId: string, paid: boolean) => void;
   clearSampleData: () => void;
 }
 
@@ -166,8 +173,69 @@ export function DataProvider({
     [mutate],
   );
 
+  const addDeal = useCallback(
+    (deal: Omit<Deal, 'id'>) => {
+      mutate((prev) => {
+        const entry: WeekEntry = { ...dealToEntry(deal), id: uuid() };
+        const newDeal: Deal = { ...deal, id: uuid(), linkedEntryId: entry.id };
+        return { ...prev, entries: [...prev.entries, entry], deals: [...prev.deals, newDeal] };
+      });
+    },
+    [mutate],
+  );
+
+  const updateDeal = useCallback(
+    (id: string, deal: Omit<Deal, 'id'>) => {
+      mutate((prev) => {
+        const existing = prev.deals.find((d) => d.id === id);
+        const entriesWithoutOldLink = existing?.linkedEntryId
+          ? prev.entries.filter((e) => e.id !== existing.linkedEntryId)
+          : prev.entries;
+        const entry: WeekEntry = { ...dealToEntry(deal), id: uuid() };
+        return {
+          ...prev,
+          entries: [...entriesWithoutOldLink, entry],
+          deals: prev.deals.map((d) => (d.id === id ? { ...deal, id, linkedEntryId: entry.id } : d)),
+        };
+      });
+    },
+    [mutate],
+  );
+
+  const deleteDeal = useCallback(
+    (id: string) => {
+      mutate((prev) => {
+        const existing = prev.deals.find((d) => d.id === id);
+        const entries = existing?.linkedEntryId
+          ? prev.entries.filter((e) => e.id !== existing.linkedEntryId)
+          : prev.entries;
+        return { ...prev, entries, deals: prev.deals.filter((d) => d.id !== id) };
+      });
+    },
+    [mutate],
+  );
+
+  const setInstallmentPaid = useCallback(
+    (dealId: string, installmentId: string, paid: boolean) => {
+      mutate((prev) => ({
+        ...prev,
+        deals: prev.deals.map((d) =>
+          d.id === dealId
+            ? {
+                ...d,
+                installments: d.installments.map((i) =>
+                  i.id === installmentId ? { ...i, paid, paidDate: paid ? todayISO() : undefined } : i,
+                ),
+              }
+            : d,
+        ),
+      }));
+    },
+    [mutate],
+  );
+
   const clearSampleData = useCallback(() => {
-    setData({ roles: [], entries: [], monthlyGoals: [], deductions: [], superContributions: [], isSample: false });
+    setData({ roles: [], entries: [], monthlyGoals: [], deductions: [], superContributions: [], deals: [], isSample: false });
   }, []);
 
   const value = useMemo<DataContextValue>(
@@ -177,6 +245,7 @@ export function DataProvider({
       monthlyGoals: data.monthlyGoals,
       deductions: data.deductions,
       superContributions: data.superContributions,
+      deals: data.deals,
       isSampleData: data.isSample === true,
       addRole,
       renameRole,
@@ -192,6 +261,10 @@ export function DataProvider({
       addSuperContribution,
       updateSuperContribution,
       deleteSuperContribution,
+      addDeal,
+      updateDeal,
+      deleteDeal,
+      setInstallmentPaid,
       clearSampleData,
     }),
     [
@@ -210,6 +283,10 @@ export function DataProvider({
       addSuperContribution,
       updateSuperContribution,
       deleteSuperContribution,
+      addDeal,
+      updateDeal,
+      deleteDeal,
+      setInstallmentPaid,
       clearSampleData,
     ],
   );
