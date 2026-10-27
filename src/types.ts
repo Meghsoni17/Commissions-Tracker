@@ -4,6 +4,8 @@ export interface Role {
   colorSlot: number; // 1-8, index into the categorical palette
   archived: boolean;
   createdAt: string; // ISO date
+  /** Default commission rate for new deals in this role, as a percentage: 10 means 10%. */
+  commissionRate?: number;
 }
 
 /** One day's share of a week's commission. */
@@ -26,6 +28,8 @@ export interface WeekEntry {
    * (and valid), monthly/FY figures use these days; without it the whole week counts on its Monday.
    */
   dayBreakdown?: DayAmount[];
+  /** Set on entries generated from a deal (its close, or a paid installment), so they can be rebuilt. */
+  dealId?: string;
 }
 
 export interface MonthlyGoal {
@@ -108,6 +112,22 @@ export interface Deal {
   notes?: string;
   createdAt: string; // ISO date the deal was logged
   linkedEntryId?: string; // id of the WeekEntry auto-created from this deal's close, for commission totals
+  /**
+   * Commission rate as a percentage (10 means 10%). Missing on deals saved before rates existed,
+   * whose entries counted the full cash collected as commission until reviewed.
+   */
+  commissionRate?: number;
+}
+
+/** One change made when existing deal entries were recalculated with a commission rate. */
+export interface CommissionFix {
+  dealId: string;
+  clientName: string;
+  label: string; // e.g. "Close, Week Of Sep 28–Oct 4, 2026" or "Installment Paid 12 Oct 2026"
+  oldCommission: number;
+  newCommission: number;
+  rate: number;
+  appliedAt: string; // ISO date
 }
 
 export interface AppData {
@@ -117,5 +137,7 @@ export interface AppData {
   deductions: Deduction[];
   superContributions: SuperContribution[];
   deals: Deal[];
+  /** The last commission recalculation, kept so the changes can be reviewed until dismissed. */
+  commissionFixes?: CommissionFix[];
   isSample?: boolean;
 }

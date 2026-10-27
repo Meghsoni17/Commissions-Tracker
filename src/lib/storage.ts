@@ -1,5 +1,6 @@
 import type { AppData, Deal, Deduction, PaymentInstallment, SuperContribution, WeekEntry } from '../types';
 import { todayISO } from './dateUtils';
+import { isValidRatePercent } from './calculations';
 
 /** Pre-encryption plaintext key from before the encrypted vault existed. Only read once, to migrate. */
 const LEGACY_DATA_KEY = 'commissions-tracker-v1';
@@ -55,6 +56,8 @@ function normalizeDeal(d: Partial<Deal> & { id: string }): Deal {
     notes: d.notes,
     createdAt: d.createdAt ?? todayISO(),
     linkedEntryId: d.linkedEntryId,
+    // Only a real percentage is kept; anything else leaves the deal flagged for review, never guessed.
+    commissionRate: isValidRatePercent(d.commissionRate) ? d.commissionRate : undefined,
   };
 }
 
@@ -85,6 +88,7 @@ export function normalizeAppData(parsed: unknown): AppData | null {
     deductions: Array.isArray(p.deductions) ? p.deductions.map(normalizeDeduction) : [],
     superContributions: Array.isArray(p.superContributions) ? p.superContributions.map(normalizeSuperContribution) : [],
     deals: Array.isArray(p.deals) ? p.deals.map(normalizeDeal) : [],
+    commissionFixes: Array.isArray(p.commissionFixes) ? p.commissionFixes : undefined,
     isSample: p.isSample,
   };
 }

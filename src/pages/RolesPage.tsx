@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useData } from '../context/DataContext';
 import { COLOR_SLOTS, roleColorVar } from '../lib/colors';
-import { formatCurrency, formatPercent, groupByRole, withRates } from '../lib/calculations';
+import { formatCurrency, formatPercent, groupByRole, isValidRatePercent, parseRatePercent, withRates } from '../lib/calculations';
 
 export function RolesPage() {
-  const { roles, entries, addRole, renameRole, setRoleColor, archiveRole } = useData();
+  const { roles, entries, addRole, renameRole, setRoleColor, archiveRole, setRoleRate } = useData();
   const [newName, setNewName] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
@@ -125,6 +125,11 @@ export function RolesPage() {
                   </button>
                 </div>
               </div>
+              <RateInput
+                key={role.commissionRate ?? 'none'}
+                saved={isValidRatePercent(role.commissionRate) ? role.commissionRate : undefined}
+                onSave={(rate) => setRoleRate(role.id, rate)}
+              />
               <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 text-sm">
                 <Metric label="Commission" value={formatCurrency(totals.commission)} />
                 <Metric label="Booked" value={String(totals.booked)} />
@@ -161,6 +166,48 @@ export function RolesPage() {
         </div>
       )}
     </div>
+  );
+}
+
+/** The role's default commission rate, prefilled on new deals. Saved on blur or Enter when valid. */
+function RateInput({ saved, onSave }: { saved: number | undefined; onSave: (rate: number | undefined) => void }) {
+  const [value, setValue] = useState(saved === undefined ? '' : String(saved));
+  const rate = parseRatePercent(value);
+  const invalid = value.trim() !== '' && rate === null;
+
+  function commit() {
+    if (invalid) return;
+    if ((rate ?? undefined) !== saved) onSave(rate ?? undefined);
+  }
+
+  return (
+    <label className="flex items-center gap-2 text-xs flex-wrap" style={{ color: 'var(--text-muted)' }}>
+      Default Commission Rate (%)
+      <input
+        type="number"
+        inputMode="decimal"
+        min={0}
+        max={100}
+        step="0.01"
+        placeholder="e.g. 10"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => e.key === 'Enter' && commit()}
+        className="w-24 rounded-md border px-2 py-1 text-sm outline-none tabular-nums"
+        style={{
+          borderColor: invalid ? 'var(--critical)' : 'var(--border)',
+          background: 'var(--surface-3)',
+          color: 'var(--text-primary)',
+        }}
+      />
+      {invalid && <span style={{ color: 'var(--critical)' }}>Must be 0–100%</span>}
+      {!invalid && rate !== null && rate > 0 && rate < 1 && (
+        <span style={{ color: 'var(--warning)' }}>
+          That's {rate}%. For {Number((rate * 100).toFixed(2))}%, enter {Number((rate * 100).toFixed(2))}.
+        </span>
+      )}
+    </label>
   );
 }
 

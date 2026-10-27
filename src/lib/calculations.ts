@@ -18,6 +18,31 @@ export function toCents(n: number): number {
   return Math.round(n * 100);
 }
 
+/**
+ * Commission rates are always stored, entered and shown as percentages: 10 means 10%, never 0.1
+ * or 1000. A valid rate is 0–100, decimals allowed (e.g. 7.5).
+ */
+export function isValidRatePercent(n: unknown): n is number {
+  return typeof n === 'number' && Number.isFinite(n) && n >= 0 && n <= 100;
+}
+
+/** Parses a rate typed into a form, e.g. "7.5"; null when blank or outside 0–100. */
+export function parseRatePercent(raw: string): number | null {
+  if (raw.trim() === '') return null;
+  const n = Number(raw);
+  return isValidRatePercent(n) ? n : null;
+}
+
+/** Commission on `amount` at `ratePercent`%, rounded to the cent: commissionAt(2000, 10) === 200. */
+export function commissionAt(amount: number, ratePercent: number): number {
+  return Math.round(toCents(amount) * ratePercent / 100) / 100;
+}
+
+/** e.g. "10%", "7.5%" */
+export function formatRate(ratePercent: number): string {
+  return `${Number(ratePercent.toFixed(2))}%`;
+}
+
 /** True when a breakdown covers only days of the entry's week and adds up exactly to its commission. */
 export function isValidDayBreakdown(weekStart: string, commission: number, breakdown: DayAmount[] | undefined): boolean {
   if (!breakdown || breakdown.length === 0) return false;

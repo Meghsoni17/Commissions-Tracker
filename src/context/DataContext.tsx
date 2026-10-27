@@ -1,9 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { v4 as uuid } from 'uuid';
-import type { AppData, Deal, Deduction, MonthlyGoal, Role, SuperContribution, WeekEntry } from '../types';
+import type { AppData, CommissionFix, Deal, Deduction, MonthlyGoal, Role, SuperContribution, WeekEntry } from '../types';
 import { saveVault } from '../lib/vault';
 import { todayISO } from '../lib/dateUtils';
-import { dealToEntry } from '../lib/deals';
+import { applyCommissionRates, dealEntries, dealRate, isDealEntry } from '../lib/deals';
 
 interface DataContextValue {
   roles: Role[];
@@ -12,11 +12,13 @@ interface DataContextValue {
   deductions: Deduction[];
   superContributions: SuperContribution[];
   deals: Deal[];
+  commissionFixes: CommissionFix[];
   isSampleData: boolean;
   addRole: (name: string) => void;
   renameRole: (id: string, name: string) => void;
   setRoleColor: (id: string, colorSlot: number) => void;
   archiveRole: (id: string, archived: boolean) => void;
+  setRoleRate: (id: string, commissionRate: number | undefined) => void;
   addEntry: (entry: Omit<WeekEntry, 'id'>) => string;
   updateEntry: (id: string, entry: Omit<WeekEntry, 'id'>) => void;
   deleteEntry: (id: string) => void;
@@ -31,12 +33,26 @@ interface DataContextValue {
   updateDeal: (id: string, deal: Omit<Deal, 'id'>) => void;
   deleteDeal: (id: string) => void;
   setInstallmentPaid: (dealId: string, installmentId: string, paid: boolean) => void;
+  applyDealRates: (rates: Map<string, number>) => void;
+  dismissCommissionFixes: () => void;
   clearSampleData: () => void;
 }
 
 const DataContext = createContext<DataContextValue | null>(null);
 
 const NEXT_COLOR_SLOTS = [1, 2, 3, 4, 5, 6, 7, 8];
+
+/**
+ * Swaps a deal's generated entries (close + paid installments) for fresh ones at its rate. Deals
+ * saved before rates existed have none, so their entries stay as they are until reviewed.
+ */
+function withDealEntries(entries: WeekEntry[], deal: Deal, previous?: Deal): { entries: WeekEntry[]; linkedEntryId?: string } {
+  const rate = dealRate(deal);
+  if (rate === null) return { entries, linkedEntryId: deal.linkedEntryId };
+  const kept = entries.filter((e) => !isDealEntry(e, previous ?? deal));
+  const fresh = dealEntries(deal, rate).map((e) => ({ ...e, id: uuid() }));
+  return { entries: [...kept, ...fresh], linkedEntryId: fresh[0].id };
+}
 
 export function DataProvider({
   cryptoKey,
@@ -88,6 +104,13 @@ export function DataProvider({
   const archiveRole = useCallback(
     (id: string, archived: boolean) => {
       mutate((prev) => ({ ...prev, roles: prev.roles.map((r) => (r.id === id ? { ...r, archived } : r)) }));
+    },
+    [mutate],
+  );
+
+  const setRoleRate = useCallback(
+    (id: string, commissionRate: number | undefined) => {
+      mutate((prev) => ({ ...prev, roles: prev.roles.map((r) => (r.id === id ? { ...r, commissionRate } : r)) }));
     },
     [mutate],
   );
@@ -178,9 +201,9 @@ export function DataProvider({
   const addDeal = useCallback(
     (deal: Omit<Deal, 'id'>) => {
       mutate((prev) => {
-        const entry: WeekEntry = { ...dealToEntry(deal), id: uuid() };
-        const newDeal: Deal = { ...deal, id: uuid(), linkedEntryId: entry.id };
-        return { ...prev, entries: [...prev.entries, entry], deals: [...prev.deals, newDeal] };
+        const newDeal: Deal = { ...deal, id: uuid() };
+        const { entries, linkedEntryId } = withDealEntries(prev.entries, newDeal);
+        return { ...prev, entries, deals: [...prev.deals, { ...newDeal, linkedEntryId }] };
       });
     },
     [mutate],
@@ -190,15 +213,9 @@ export function DataProvider({
     (id: string, deal: Omit<Deal, 'id'>) => {
       mutate((prev) => {
         const existing = prev.deals.find((d) => d.id === id);
-        const entriesWithoutOldLink = existing?.linkedEntryId
-          ? prev.entries.filter((e) => e.id !== existing.linkedEntryId)
-          : prev.entries;
-        const entry: WeekEntry = { ...dealToEntry(deal), id: uuid() };
-        return {
-          ...prev,
-          entries: [...entriesWithoutOldLink, entry],
-          deals: prev.deals.map((d) => (d.id === id ? { ...deal, id, linkedEntryId: entry.id } : d)),
-        };
+        const next: Deal = { ...deal, id, linkedEntryId: existing?.linkedEntryId };
+        const { entries, linkedEntryId } = withDealEntries(prev.entries, next, existing);
+        return { ...prev, entries, deals: prev.deals.map((d) => (d.id === id ? { ...next, linkedEntryId } : d)) };
       });
     },
     [mutate],
@@ -208,9 +225,7 @@ export function DataProvider({
     (id: string) => {
       mutate((prev) => {
         const existing = prev.deals.find((d) => d.id === id);
-        const entries = existing?.linkedEntryId
-          ? prev.entries.filter((e) => e.id !== existing.linkedEntryId)
-          : prev.entries;
+        const entries = existing ? prev.entries.filter((e) => !isDealEntry(e, existing)) : prev.entries;
         return { ...prev, entries, deals: prev.deals.filter((d) => d.id !== id) };
       });
     },
@@ -219,22 +234,39 @@ export function DataProvider({
 
   const setInstallmentPaid = useCallback(
     (dealId: string, installmentId: string, paid: boolean) => {
-      mutate((prev) => ({
-        ...prev,
-        deals: prev.deals.map((d) =>
-          d.id === dealId
-            ? {
-                ...d,
-                installments: d.installments.map((i) =>
-                  i.id === installmentId ? { ...i, paid, paidDate: paid ? todayISO() : undefined } : i,
-                ),
-              }
-            : d,
-        ),
-      }));
+      mutate((prev) => {
+        const existing = prev.deals.find((d) => d.id === dealId);
+        if (!existing) return prev;
+        const deal: Deal = {
+          ...existing,
+          installments: existing.installments.map((i) =>
+            i.id === installmentId ? { ...i, paid, paidDate: paid ? todayISO() : undefined } : i,
+          ),
+        };
+        const deals = prev.deals.map((d) => (d.id === dealId ? deal : d));
+        const rate = dealRate(deal);
+        if (rate === null) return { ...prev, deals };
+        // Only the installment entries are rebuilt; the close entry (and any edits to it) stays.
+        const entries = prev.entries.filter((e) => !(e.dealId === dealId && e.id !== deal.linkedEntryId));
+        const installmentEntries = dealEntries(deal, rate)
+          .slice(1)
+          .map((e) => ({ ...e, id: uuid() }));
+        return { ...prev, deals, entries: [...entries, ...installmentEntries] };
+      });
     },
     [mutate],
   );
+
+  const applyDealRates = useCallback(
+    (rates: Map<string, number>) => {
+      mutate((prev) => applyCommissionRates(prev, rates));
+    },
+    [mutate],
+  );
+
+  const dismissCommissionFixes = useCallback(() => {
+    mutate((prev) => ({ ...prev, commissionFixes: undefined }));
+  }, [mutate]);
 
   const clearSampleData = useCallback(() => {
     setData({ roles: [], entries: [], monthlyGoals: [], deductions: [], superContributions: [], deals: [], isSample: false });
@@ -248,11 +280,13 @@ export function DataProvider({
       deductions: data.deductions,
       superContributions: data.superContributions,
       deals: data.deals,
+      commissionFixes: data.commissionFixes ?? [],
       isSampleData: data.isSample === true,
       addRole,
       renameRole,
       setRoleColor,
       archiveRole,
+      setRoleRate,
       addEntry,
       updateEntry,
       deleteEntry,
@@ -267,6 +301,8 @@ export function DataProvider({
       updateDeal,
       deleteDeal,
       setInstallmentPaid,
+      applyDealRates,
+      dismissCommissionFixes,
       clearSampleData,
     }),
     [
@@ -275,6 +311,7 @@ export function DataProvider({
       renameRole,
       setRoleColor,
       archiveRole,
+      setRoleRate,
       addEntry,
       updateEntry,
       deleteEntry,
@@ -289,6 +326,8 @@ export function DataProvider({
       updateDeal,
       deleteDeal,
       setInstallmentPaid,
+      applyDealRates,
+      dismissCommissionFixes,
       clearSampleData,
     ],
   );

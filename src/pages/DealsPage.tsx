@@ -2,14 +2,22 @@ import { useMemo, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { v4 as uuid } from 'uuid';
 import { useData } from '../context/DataContext';
-import type { Deal, InstallmentFrequency, PaymentInstallment, PaymentStructure } from '../types';
+import type { CommissionFix, Deal, InstallmentFrequency, PaymentInstallment, PaymentStructure, Role, WeekEntry } from '../types';
 import { INSTALLMENT_FREQUENCIES, PAYMENT_STRUCTURES } from '../types';
 import { RoleBadge } from '../components/RoleBadge';
 import { ProgressBar } from '../components/ProgressBar';
 import { UpcomingPayments } from '../components/UpcomingPayments';
-import { formatCurrencyExact } from '../lib/calculations';
+import { formatCurrencyExact, formatRate, isValidRatePercent, parseRatePercent } from '../lib/calculations';
 import { formatShortDate, todayISO, weekStartISO } from '../lib/dateUtils';
-import { collectedTotal, generateInstallments, outstandingBalance, scheduledTotal } from '../lib/deals';
+import {
+  collectedTotal,
+  dealCommission,
+  dealRate,
+  generateInstallments,
+  isDealEntry,
+  outstandingBalance,
+  scheduledTotal,
+} from '../lib/deals';
 import { addDays, format, parseISO } from 'date-fns';
 
 interface DealFormState {
@@ -18,6 +26,7 @@ interface DealFormState {
   saleDate: string;
   totalContractValue: string;
   cashCollectedOnCall: string;
+  commissionRate: string; // a percentage, e.g. "10" or "7.5"
   paymentStructure: PaymentStructure;
   installmentCount: string;
   installmentFrequency: InstallmentFrequency;
@@ -26,13 +35,19 @@ interface DealFormState {
   notes: string;
 }
 
-function emptyForm(defaultRoleId: string): DealFormState {
+/** The role's default rate as form text, or blank when it has none. */
+function roleRateText(role: Role | undefined): string {
+  return role && isValidRatePercent(role.commissionRate) ? String(role.commissionRate) : '';
+}
+
+function emptyForm(defaultRole: Role | undefined): DealFormState {
   return {
-    roleId: defaultRoleId,
+    roleId: defaultRole?.id ?? '',
     clientName: '',
     saleDate: todayISO(),
     totalContractValue: '',
     cashCollectedOnCall: '',
+    commissionRate: roleRateText(defaultRole),
     paymentStructure: 'Paid in Full',
     installmentCount: '3',
     installmentFrequency: 'Monthly',
@@ -43,23 +58,38 @@ function emptyForm(defaultRoleId: string): DealFormState {
 }
 
 export function DealsPage() {
-  const { roles, deals, addDeal, updateDeal, deleteDeal, setInstallmentPaid } = useData();
+  const { roles, entries, deals, commissionFixes, addDeal, updateDeal, deleteDeal, setInstallmentPaid, applyDealRates, dismissCommissionFixes } =
+    useData();
   const activeRoles = roles.filter((r) => !r.archived);
   const roleById = useMemo(() => new Map(roles.map((r) => [r.id, r])), [roles]);
 
-  const [form, setForm] = useState<DealFormState>(() => emptyForm(activeRoles[0]?.id ?? ''));
+  const [form, setForm] = useState<DealFormState>(() => emptyForm(activeRoles[0]));
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const totalContractValue = Number(form.totalContractValue) || 0;
   const cashCollectedOnCall = Number(form.cashCollectedOnCall) || 0;
   const remaining = Math.max(0, totalContractValue - cashCollectedOnCall);
   const overCollected = cashCollectedOnCall > totalContractValue && totalContractValue > 0;
+  const rate = parseRatePercent(form.commissionRate);
+  const rateError = form.commissionRate.trim() !== '' && rate === null;
+  const livePreview =
+    rate === null
+      ? null
+      : dealCommission(
+          {
+            ...form,
+            totalContractValue,
+            cashCollectedOnCall,
+            installments: form.paymentStructure === 'Paid in Full' ? [] : form.installments,
+          },
+          rate,
+        );
   const scheduleTotal = scheduledTotal(form.installments);
   const scheduleMismatch =
     form.paymentStructure !== 'Paid in Full' && form.installments.length > 0 && Math.abs(scheduleTotal - remaining) > 0.01;
 
   function resetForm() {
-    setForm(emptyForm(activeRoles[0]?.id ?? ''));
+    setForm(emptyForm(activeRoles[0]));
     setEditingId(null);
   }
 
@@ -71,6 +101,7 @@ export function DealsPage() {
       saleDate: deal.saleDate,
       totalContractValue: String(deal.totalContractValue),
       cashCollectedOnCall: String(deal.cashCollectedOnCall),
+      commissionRate: dealRate(deal) !== null ? String(deal.commissionRate) : roleRateText(roleById.get(deal.roleId)),
       paymentStructure: deal.paymentStructure,
       installmentCount: String(Math.max(1, deal.installments.length || 3)),
       installmentFrequency: 'Monthly',
@@ -109,13 +140,14 @@ export function DealsPage() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.roleId || !form.clientName.trim() || totalContractValue <= 0) return;
+    if (!form.roleId || !form.clientName.trim() || totalContractValue <= 0 || rate === null) return;
     const payload: Omit<Deal, 'id'> = {
       roleId: form.roleId,
       clientName: form.clientName.trim(),
       saleDate: form.saleDate,
       totalContractValue,
       cashCollectedOnCall,
+      commissionRate: rate,
       paymentStructure: form.paymentStructure,
       installments: form.paymentStructure === 'Paid in Full' ? [] : form.installments,
       notes: form.notes.trim() || undefined,
@@ -136,12 +168,15 @@ export function DealsPage() {
       <div>
         <h2 className="text-xl font-semibold">Deals</h2>
         <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-          Log contract value, cash collected on the call, and a payment structure for the remaining balance. Each
-          deal automatically adds a closed-call entry for the cash collected on the call, so it counts toward your
-          weekly and dashboard commission totals. Follow-up payments are tracked here but don't add further
-          commission entries.
+          Log contract value, cash collected on the call, your commission rate, and a payment structure for the
+          remaining balance. Commission is earned only on cash collected: each deal adds a closed-call entry for the
+          commission on the cash collected on the call, and each follow-up payment you mark paid adds its commission
+          on the date it was paid. Those entries count toward your dashboard, goals, tax and super figures.
         </p>
       </div>
+
+      <CommissionReview deals={deals} entries={entries} roles={roles} onApply={applyDealRates} />
+      <CommissionFixLog fixes={commissionFixes} onDismiss={dismissCommissionFixes} />
 
       <div className="rounded-xl border p-4" style={{ borderColor: 'var(--border)', background: 'var(--surface-1)' }}>
         <h3 className="text-sm font-medium mb-3">Upcoming & Overdue Payments</h3>
@@ -158,11 +193,15 @@ export function DealsPage() {
           className="rounded-xl border p-4 flex flex-col gap-4"
           style={{ borderColor: 'var(--border)', background: 'var(--surface-1)' }}
         >
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
             <Field label="Role">
               <select
                 value={form.roleId}
-                onChange={(e) => setForm((f) => ({ ...f, roleId: e.target.value }))}
+                onChange={(e) => {
+                  const roleId = e.target.value;
+                  // Switching role brings in that role's default rate, if it has one.
+                  setForm((f) => ({ ...f, roleId, commissionRate: roleRateText(roleById.get(roleId)) || f.commissionRate }));
+                }}
                 className="w-full rounded-md border px-2 py-1.5 text-sm outline-none"
                 style={inputStyle}
               >
@@ -213,6 +252,20 @@ export function DealsPage() {
                 style={overCollected ? { ...inputStyle, borderColor: 'var(--critical)' } : inputStyle}
               />
             </Field>
+            <Field label="Commission Rate (%)" error={rateError ? 'Must be 0–100%' : undefined}>
+              <input
+                type="number"
+                inputMode="decimal"
+                min={0}
+                max={100}
+                step="0.01"
+                placeholder="e.g. 10"
+                value={form.commissionRate}
+                onChange={(e) => setForm((f) => ({ ...f, commissionRate: e.target.value }))}
+                className="w-full rounded-md border px-2 py-1.5 text-sm outline-none tabular-nums"
+                style={rateError ? { ...inputStyle, borderColor: 'var(--critical)' } : inputStyle}
+              />
+            </Field>
           </div>
 
           <div className="flex items-center justify-between flex-wrap gap-2 text-xs" style={{ color: 'var(--text-muted)' }}>
@@ -220,6 +273,13 @@ export function DealsPage() {
               Remaining balance to schedule: <strong style={{ color: 'var(--text-primary)' }}>{formatCurrencyExact(remaining)}</strong>
             </span>
           </div>
+
+          <CommissionPreview
+            preview={livePreview}
+            rate={rate}
+            collected={cashCollectedOnCall + (form.paymentStructure === 'Paid in Full' ? 0 : form.installments.filter((i) => i.paid).reduce((sum, i) => sum + i.amount, 0))}
+            totalContractValue={totalContractValue}
+          />
 
           <div className="flex flex-col gap-3">
             <Field label="Payment Structure">
@@ -352,7 +412,7 @@ export function DealsPage() {
           <div className="flex items-center gap-2">
             <button
               type="submit"
-              disabled={overCollected}
+              disabled={overCollected || rate === null}
               className="rounded-lg px-4 py-2 text-sm font-medium cursor-pointer text-white disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ background: 'var(--series-1)' }}
             >
@@ -377,6 +437,8 @@ export function DealsPage() {
           const role = roleById.get(deal.roleId);
           const collected = collectedTotal(deal);
           const pct = deal.totalContractValue > 0 ? collected / deal.totalContractValue : 0;
+          const rateSet = dealRate(deal);
+          const commission = rateSet === null ? null : dealCommission(deal, rateSet);
           return (
             <div key={deal.id} className="rounded-xl border p-4 flex flex-col gap-3" style={{ borderColor: 'var(--border)', background: 'var(--surface-1)' }}>
               <div className="flex items-center justify-between flex-wrap gap-2">
@@ -402,6 +464,13 @@ export function DealsPage() {
                 <MiniStat label="Collected On Call" value={formatCurrencyExact(deal.cashCollectedOnCall)} />
                 <MiniStat label="Collected To Date" value={formatCurrencyExact(collected)} />
                 <MiniStat label="Remaining Balance" value={formatCurrencyExact(outstandingBalance(deal))} />
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                <MiniStat label="Commission Rate" value={rateSet === null ? 'Not Set' : formatRate(rateSet)} />
+                <MiniStat label="Commission Earned" value={commission ? formatCurrencyExact(commission.earned) : '—'} />
+                <MiniStat label="Expected On Full Contract" value={commission ? formatCurrencyExact(commission.expected) : '—'} />
+                <MiniStat label="Commission Still To Come" value={commission ? formatCurrencyExact(commission.toCome) : '—'} />
               </div>
 
               <ProgressBar value={pct} color={pct >= 1 ? 'var(--success)' : 'var(--series-1)'} />
@@ -456,9 +525,10 @@ export function DealsPage() {
                 </div>
               )}
 
-              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                Counted in Entries as 1 closed call · {formatCurrencyExact(deal.cashCollectedOnCall)} commission for
-                the week of {formatShortDate(weekStartISO(parseISO(deal.saleDate)))}.
+              <p className="text-xs" style={{ color: rateSet === null ? 'var(--critical)' : 'var(--text-muted)' }}>
+                {rateSet === null
+                  ? 'No commission rate saved for this deal, so its entry still counts the full cash collected as commission. Review it above.'
+                  : `Counted in Entries as 1 closed call · ${formatCurrencyExact(dealCommission({ ...deal, installments: [] }, rateSet).earned)} commission (${formatRate(rateSet)} of ${formatCurrencyExact(deal.cashCollectedOnCall)}) for the week of ${formatShortDate(weekStartISO(parseISO(deal.saleDate)))}. Only the earned amount counts toward totals, goals and tax.`}
               </p>
 
               {deal.notes && (
@@ -521,5 +591,210 @@ function Field({ label, error, children }: { label: string; error?: string; chil
       {children}
       {error && <span style={{ color: 'var(--critical)' }}>{error}</span>}
     </label>
+  );
+}
+
+/** Live commission figures for the deal being typed into the form. */
+function CommissionPreview({
+  preview,
+  rate,
+  collected,
+  totalContractValue,
+}: {
+  preview: ReturnType<typeof dealCommission> | null;
+  rate: number | null;
+  collected: number;
+  totalContractValue: number;
+}) {
+  if (preview === null || rate === null) {
+    return (
+      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+        Enter a commission rate (0–100%) to see your commission.
+      </p>
+    );
+  }
+  const uncollected = Math.max(0, totalContractValue - collected);
+  const rows: [string, number, number][] = [
+    ['Commission Earned', collected, preview.earned],
+    ['Expected On Full Contract', totalContractValue, preview.expected],
+    ['Commission Still To Come', uncollected, preview.toCome],
+  ];
+  return (
+    <div className="rounded-lg border p-3 flex flex-col gap-1.5 text-sm" style={{ borderColor: 'var(--border)' }}>
+      {rows.map(([label, base, value], idx) => (
+        <div key={label} className="flex items-center justify-between gap-3 flex-wrap tabular-nums">
+          <span style={{ color: idx === 0 ? 'var(--text-primary)' : 'var(--text-secondary)', fontWeight: idx === 0 ? 600 : 400 }}>
+            {label}
+          </span>
+          <span style={{ color: idx === 0 ? 'var(--text-primary)' : 'var(--text-secondary)', fontWeight: idx === 0 ? 600 : 400 }}>
+            {formatCurrencyExact(base)} × {formatRate(rate)} = {formatCurrencyExact(value)}
+          </span>
+        </div>
+      ))}
+      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+        Only the earned amount counts toward your totals, goals and tax figures.
+      </span>
+      {rate > 0 && rate < 1 && (
+        <span className="text-xs" style={{ color: 'var(--warning)' }}>
+          That's {formatRate(rate)}, not {formatRate(rate * 100)}. For {formatRate(rate * 100)}, enter {Number((rate * 100).toFixed(2))}.
+        </span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Deals saved before commission rates existed counted the full cash collected as commission. Lists
+ * them with a rate to apply (prefilled from the role's default, never guessed) and the corrected figure.
+ */
+function CommissionReview({
+  deals,
+  entries,
+  roles,
+  onApply,
+}: {
+  deals: Deal[];
+  entries: WeekEntry[];
+  roles: Role[];
+  onApply: (rates: Map<string, number>) => void;
+}) {
+  const roleById = new Map(roles.map((r) => [r.id, r]));
+  const legacy = deals.filter((d) => dealRate(d) === null);
+  const [rates, setRates] = useState<Record<string, string>>(() =>
+    Object.fromEntries(legacy.map((d) => [d.id, roleRateText(roleById.get(d.roleId))])),
+  );
+  if (legacy.length === 0) return null;
+
+  const parsed = new Map<string, number>();
+  for (const d of legacy) {
+    const r = parseRatePercent(rates[d.id] ?? '');
+    if (r !== null) parsed.set(d.id, r);
+  }
+
+  return (
+    <div
+      className="rounded-xl border p-4 flex flex-col gap-3"
+      style={{ borderColor: 'color-mix(in srgb, var(--warning) 60%, transparent)', background: 'var(--surface-1)' }}
+    >
+      <div>
+        <h3 className="text-sm font-medium">Review Commission On Existing Deals</h3>
+        <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>
+          These deals were saved before commission rates existed, so their entries counted 100% of the cash collected
+          as commission. Enter each deal's rate and apply to correct them. Only these deals' entries change; you'll see
+          a list of every change afterwards.
+        </p>
+      </div>
+      <div className="overflow-x-auto rounded-lg border" style={{ borderColor: 'var(--border)' }}>
+        <table className="w-full text-sm border-collapse min-w-[640px]">
+          <thead>
+            <tr style={{ borderBottom: '1px solid var(--border)' }}>
+              {['Deal', 'Sale Date', 'Collected So Far', 'Current Commission', 'Rate (%)', 'Corrected Commission'].map((h) => (
+                <th key={h} className="text-left px-3 py-1.5 font-medium" style={{ color: 'var(--text-muted)' }}>
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {legacy.map((deal) => {
+              const current = entries.filter((e) => isDealEntry(e, deal)).reduce((sum, e) => sum + e.commission, 0);
+              const raw = rates[deal.id] ?? '';
+              const r = parsed.get(deal.id);
+              const invalid = raw.trim() !== '' && r === undefined;
+              return (
+                <tr key={deal.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                  <td className="px-3 py-1.5 font-medium">{deal.clientName}</td>
+                  <td className="px-3 py-1.5 whitespace-nowrap" style={{ color: 'var(--text-secondary)' }}>
+                    {formatShortDate(deal.saleDate)}
+                  </td>
+                  <td className="px-3 py-1.5 tabular-nums">{formatCurrencyExact(collectedTotal(deal))}</td>
+                  <td className="px-3 py-1.5 tabular-nums" style={{ color: 'var(--critical)' }}>
+                    {formatCurrencyExact(current)}
+                  </td>
+                  <td className="px-3 py-1.5">
+                    <input
+                      type="number"
+                      inputMode="decimal"
+                      min={0}
+                      max={100}
+                      step="0.01"
+                      placeholder="e.g. 10"
+                      value={raw}
+                      onChange={(e) => setRates((cur) => ({ ...cur, [deal.id]: e.target.value }))}
+                      aria-label={`Commission Rate For ${deal.clientName}`}
+                      className="w-20 rounded-md border px-2 py-1 text-sm outline-none tabular-nums"
+                      style={invalid ? { ...inputStyle, borderColor: 'var(--critical)' } : inputStyle}
+                    />
+                  </td>
+                  <td className="px-3 py-1.5 tabular-nums font-medium">
+                    {invalid ? (
+                      <span className="text-xs" style={{ color: 'var(--critical)' }}>
+                        Must be 0–100%
+                      </span>
+                    ) : r === undefined ? (
+                      '—'
+                    ) : (
+                      formatCurrencyExact(dealCommission(deal, r).earned)
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <button
+        type="button"
+        onClick={() => onApply(parsed)}
+        disabled={parsed.size === 0}
+        className="rounded-lg px-4 py-2 text-sm font-medium cursor-pointer text-white w-fit disabled:opacity-50 disabled:cursor-not-allowed"
+        style={{ background: 'var(--series-1)' }}
+      >
+        Apply Rates To {parsed.size} {parsed.size === 1 ? 'Deal' : 'Deals'}
+      </button>
+    </div>
+  );
+}
+
+/** Every entry changed by the last recalculation, old figure vs new, until dismissed. */
+function CommissionFixLog({ fixes, onDismiss }: { fixes: CommissionFix[]; onDismiss: () => void }) {
+  if (fixes.length === 0) return null;
+  return (
+    <div className="rounded-xl border p-4 flex flex-col gap-3" style={{ borderColor: 'var(--border)', background: 'var(--surface-1)' }}>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <h3 className="text-sm font-medium">Recalculated Entries ({fixes.length})</h3>
+        <button onClick={onDismiss} className="text-xs underline cursor-pointer" style={{ color: 'var(--text-secondary)' }}>
+          Dismiss
+        </button>
+      </div>
+      <div className="overflow-x-auto rounded-lg border" style={{ borderColor: 'var(--border)' }}>
+        <table className="w-full text-sm border-collapse min-w-[560px]">
+          <thead>
+            <tr style={{ borderBottom: '1px solid var(--border)' }}>
+              {['Deal', 'Entry', 'Rate', 'Old Commission', 'New Commission'].map((h) => (
+                <th key={h} className="text-left px-3 py-1.5 font-medium" style={{ color: 'var(--text-muted)' }}>
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {fixes.map((fix, idx) => (
+              <tr key={`${fix.dealId}-${idx}`} style={{ borderBottom: '1px solid var(--border)' }}>
+                <td className="px-3 py-1.5 font-medium">{fix.clientName}</td>
+                <td className="px-3 py-1.5" style={{ color: 'var(--text-secondary)' }}>
+                  {fix.label}
+                </td>
+                <td className="px-3 py-1.5 tabular-nums">{formatRate(fix.rate)}</td>
+                <td className="px-3 py-1.5 tabular-nums" style={{ color: 'var(--text-muted)' }}>
+                  {formatCurrencyExact(fix.oldCommission)}
+                </td>
+                <td className="px-3 py-1.5 tabular-nums font-medium">{formatCurrencyExact(fix.newCommission)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }

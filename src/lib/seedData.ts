@@ -8,7 +8,7 @@ import { addDays, format, parseISO } from 'date-fns';
 export function buildSeedData(): AppData {
   const weeks = recentWeeks(10);
   const roles: AppData['roles'] = [
-    { id: 'role-sales', name: 'Closer', colorSlot: 1, archived: false, createdAt: weeks[0] },
+    { id: 'role-sales', name: 'Closer', colorSlot: 1, archived: false, createdAt: weeks[0], commissionRate: 10 },
     { id: 'role-setter', name: 'Setter', colorSlot: 2, archived: false, createdAt: weeks[0] },
   ];
 
@@ -121,6 +121,7 @@ export function buildSeedData(): AppData {
       ).map((installment, idx) => (idx === 0 ? { ...installment, paid: true, paidDate: weeks[weeks.length - 1] } : installment)),
       notes: 'Deposit taken on the close, balance over 4 months.',
       createdAt: weeks[weeks.length - 3],
+      commissionRate: 10,
     },
     {
       id: 'seed-deal-2',
@@ -132,6 +133,7 @@ export function buildSeedData(): AppData {
       paymentStructure: 'Paid in Full',
       installments: [],
       createdAt: weeks[weeks.length - 1],
+      commissionRate: 10,
     },
     {
       id: 'seed-deal-3',
@@ -147,6 +149,7 @@ export function buildSeedData(): AppData {
       ],
       notes: 'Custom split negotiated around their cash flow.',
       createdAt: weeks[0],
+      commissionRate: 10,
     },
   ];
 
