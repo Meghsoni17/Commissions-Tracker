@@ -1,4 +1,4 @@
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { useIsDark } from '../../hooks/useIsDark';
 import { roleColorHex } from '../../lib/colors';
 import { formatPercent } from '../../lib/calculations';
@@ -6,22 +6,25 @@ import { ChartLegend } from './ChartLegend';
 
 export interface RatePoint {
   role: string;
-  showRate: number;
-  closeRate: number;
+  colorSlot: number;
+  showRate: number | null;
+  closeRate: number | null;
 }
 
+const CLOSE_OPACITY = 0.45;
+
+/** Bars take each role's badge colour: solid for show rate, lighter for close rate. */
 export function RateComparisonChart({ data }: { data: RatePoint[] }) {
   const isDark = useIsDark();
-  const showColor = roleColorHex(1, isDark);
-  const closeColor = roleColorHex(3, isDark);
+  const neutral = roleColorHex(0, isDark);
   const muted = 'var(--text-muted)';
 
   return (
     <div className="flex flex-col gap-2">
       <ChartLegend
         items={[
-          { label: 'Show Rate', color: showColor },
-          { label: 'Close Rate', color: closeColor },
+          { label: 'Show Rate (Solid)', color: neutral },
+          { label: 'Close Rate (Lighter)', color: `${neutral}73` },
         ]}
       />
       <ResponsiveContainer width="100%" height={220}>
@@ -49,15 +52,23 @@ export function RateComparisonChart({ data }: { data: RatePoint[] }) {
                   {payload.map((p) => (
                     <div key={p.dataKey as string} className="flex items-center justify-between gap-4">
                       <span style={{ color: 'var(--text-secondary)' }}>{p.dataKey === 'showRate' ? 'Show Rate' : 'Close Rate'}</span>
-                      <span className="tabular-nums">{formatPercent(p.value as number)}</span>
+                      <span className="tabular-nums">{formatPercent(p.value as number | null)}</span>
                     </div>
                   ))}
                 </div>
               );
             }}
           />
-          <Bar dataKey="showRate" fill={showColor} maxBarSize={24} radius={[4, 4, 0, 0]} />
-          <Bar dataKey="closeRate" fill={closeColor} maxBarSize={24} radius={[4, 4, 0, 0]} />
+          <Bar dataKey="showRate" maxBarSize={24} radius={[4, 4, 0, 0]}>
+            {data.map((d) => (
+              <Cell key={d.role} fill={roleColorHex(d.colorSlot, isDark)} />
+            ))}
+          </Bar>
+          <Bar dataKey="closeRate" maxBarSize={24} radius={[4, 4, 0, 0]}>
+            {data.map((d) => (
+              <Cell key={d.role} fill={roleColorHex(d.colorSlot, isDark)} fillOpacity={CLOSE_OPACITY} />
+            ))}
+          </Bar>
         </BarChart>
       </ResponsiveContainer>
     </div>

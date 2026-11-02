@@ -4,7 +4,9 @@ function normalizeSlot(slot: number): number {
   return ((slot - 1 + 8) % 8) + 1;
 }
 
+/** Slot 0 is the neutral colour used for Unassigned. */
 export function roleColorVar(slot: number): string {
+  if (slot === 0) return 'var(--text-muted)';
   return `var(--series-${normalizeSlot(slot)})`;
 }
 
@@ -13,6 +15,7 @@ const DARK_HEX = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#00830
 
 /** Literal hex for contexts (SVG chart fills) that need a resolved color rather than a CSS var. */
 export function roleColorHex(slot: number, isDark: boolean): string {
+  if (slot === 0) return '#898781';
   const idx = normalizeSlot(slot) - 1;
   return (isDark ? DARK_HEX : LIGHT_HEX)[idx];
 }

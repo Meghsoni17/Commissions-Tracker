@@ -2,9 +2,12 @@ import { useState } from 'react';
 import { useData } from '../context/DataContext';
 import { COLOR_SLOTS, roleColorVar } from '../lib/colors';
 import { formatCurrency, formatPercent, groupByRole, isValidRatePercent, parseRatePercent, withRates } from '../lib/calculations';
+import { roleUsage } from '../lib/roles';
+import type { Role } from '../types';
 
 export function RolesPage() {
   const { roles, entries, addRole, renameRole, setRoleColor, archiveRole, setRoleRate } = useData();
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState('');
@@ -123,20 +126,29 @@ export function RolesPage() {
                   >
                     Archive
                   </button>
+                  <button
+                    onClick={() => setDeletingId(role.id)}
+                    className="text-xs px-2 py-1 rounded-md cursor-pointer"
+                    style={{ color: 'var(--critical)', border: '1px solid var(--border)' }}
+                  >
+                    Delete
+                  </button>
                 </div>
               </div>
+              {deletingId === role.id && <DeleteRolePanel role={role} onClose={() => setDeletingId(null)} />}
               <RateInput
                 key={role.commissionRate ?? 'none'}
                 saved={isValidRatePercent(role.commissionRate) ? role.commissionRate : undefined}
                 onSave={(rate) => setRoleRate(role.id, rate)}
               />
-              <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 text-sm">
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 text-sm">
                 <Metric label="Commission" value={formatCurrency(totals.commission)} />
                 <Metric label="Booked" value={String(totals.booked)} />
                 <Metric label="Showed" value={String(totals.showed)} />
                 <Metric label="Closed" value={String(totals.closed)} />
                 <Metric label="Show Rate" value={formatPercent(totals.showRate)} />
                 <Metric label="Close Rate" value={formatPercent(totals.closeRate)} />
+                <Metric label="Booked-To-Close" value={formatPercent(totals.bookedToCloseRate)} />
               </div>
             </div>
           );
@@ -151,20 +163,93 @@ export function RolesPage() {
           {archived.map((role) => (
             <div
               key={role.id}
-              className="rounded-lg border px-3 py-2 flex items-center justify-between text-sm"
+              className="rounded-lg border px-3 py-2 flex flex-col gap-2 text-sm"
               style={{ borderColor: 'var(--border)', background: 'var(--surface-1)', color: 'var(--text-muted)' }}
             >
-              <span className="flex items-center gap-2">
-                <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: roleColorVar(role.colorSlot) }} />
-                {role.name}
-              </span>
-              <button onClick={() => archiveRole(role.id, false)} className="underline cursor-pointer">
-                Restore
-              </button>
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: roleColorVar(role.colorSlot) }} />
+                  {role.name}
+                </span>
+                <span className="flex items-center gap-3">
+                  <button onClick={() => archiveRole(role.id, false)} className="underline cursor-pointer">
+                    Restore
+                  </button>
+                  <button onClick={() => setDeletingId(role.id)} className="underline cursor-pointer" style={{ color: 'var(--critical)' }}>
+                    Delete
+                  </button>
+                </span>
+              </div>
+              {deletingId === role.id && <DeleteRolePanel role={role} onClose={() => setDeletingId(null)} />}
             </div>
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/** Warns what a role still holds and offers to reassign it or keep it as Unassigned. Never deletes data. */
+function DeleteRolePanel({ role, onClose }: { role: Role; onClose: () => void }) {
+  const { roles, entries, deals, recentlyDeleted, recentlyDeletedSales, deleteRole } = useData();
+  const [choice, setChoice] = useState<'reassign' | 'keep'>('reassign');
+  const others = roles.filter((r) => r.id !== role.id && !r.archived);
+  const [reassignTo, setReassignTo] = useState(others[0]?.id ?? '');
+  const usage = roleUsage({ entries, deals, recentlyDeleted, recentlyDeletedSales }, role.id);
+  const mode = others.length === 0 ? 'keep' : choice;
+
+  return (
+    <div
+      className="rounded-lg p-3 flex flex-col gap-2 text-sm"
+      style={{
+        color: 'var(--text-primary)',
+        background: 'color-mix(in srgb, var(--warning) 12%, transparent)',
+        border: '1px solid color-mix(in srgb, var(--warning) 60%, transparent)',
+      }}
+    >
+      <p className="font-semibold">Delete {role.name}?</p>
+      <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+        This role has {usage.entries} {usage.entries === 1 ? 'entry' : 'entries'}, {usage.deals} {usage.deals === 1 ? 'deal' : 'deals'} and{' '}
+        {usage.deleted} Recently Deleted {usage.deleted === 1 ? 'item' : 'items'}. None of them will be deleted, and no amounts change.
+      </p>
+      {others.length > 0 && (
+        <label className="flex items-center gap-2 text-xs flex-wrap cursor-pointer">
+          <input type="radio" checked={mode === 'reassign'} onChange={() => setChoice('reassign')} />
+          Reassign To
+          <select
+            aria-label="Role To Reassign To"
+            value={reassignTo}
+            onChange={(e) => setReassignTo(e.target.value)}
+            className="rounded-md border px-2 py-1 text-xs outline-none"
+            style={{ borderColor: 'var(--border)', background: 'var(--surface-3)', color: 'var(--text-primary)' }}
+          >
+            {others.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      <label className="flex items-center gap-2 text-xs cursor-pointer">
+        <input type="radio" checked={mode === 'keep'} onChange={() => setChoice('keep')} />
+        Keep As Unassigned
+      </label>
+      <div className="flex items-center gap-2">
+        <button
+          onClick={() => {
+            deleteRole(role.id, mode === 'reassign' ? reassignTo : undefined);
+            onClose();
+          }}
+          className="rounded-md px-3 py-1 text-xs font-medium cursor-pointer text-white"
+          style={{ background: 'var(--critical)' }}
+        >
+          Delete Role
+        </button>
+        <button onClick={onClose} className="text-xs cursor-pointer" style={{ color: 'var(--text-muted)' }}>
+          Cancel
+        </button>
+      </div>
     </div>
   );
 }

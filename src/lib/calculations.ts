@@ -11,6 +11,7 @@ export interface Totals {
 export interface RateTotals extends Totals {
   showRate: number | null; // showed / booked
   closeRate: number | null; // closed / showed
+  bookedToCloseRate: number | null; // closed / booked
 }
 
 /** Money in whole cents, so day amounts like 10.99 add up exactly. */
@@ -97,7 +98,12 @@ export function closeRate(closed: number, showed: number): number | null {
 }
 
 export function withRates(t: Totals): RateTotals {
-  return { ...t, showRate: showRate(t.showed, t.booked), closeRate: closeRate(t.closed, t.showed) };
+  return {
+    ...t,
+    showRate: showRate(t.showed, t.booked),
+    closeRate: closeRate(t.closed, t.showed),
+    bookedToCloseRate: t.booked > 0 ? t.closed / t.booked : null,
+  };
 }
 
 export function sumEntries(entries: WeekEntry[]): Totals {

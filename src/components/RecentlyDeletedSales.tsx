@@ -3,7 +3,7 @@ import { useData } from '../context/DataContext';
 import { formatWeekLabel } from '../lib/dateUtils';
 import { RECENTLY_DELETED_DAYS, deletedItemDaysLeft } from '../lib/reset';
 import { canRestoreSales } from '../lib/salesReset';
-import { RoleBadge } from './RoleBadge';
+import { RoleTag } from './RoleBadge';
 
 /** The Reset Sales Data safety net: restore cleared numbers, or empty it for good. */
 export function RecentlyDeletedSales() {
@@ -78,7 +78,9 @@ export function RecentlyDeletedSales() {
                 return (
                   <tr key={d.id} style={{ borderBottom: '1px solid var(--border)' }}>
                     <td className="px-3 py-2 whitespace-nowrap">{formatWeekLabel(d.weekStart)}</td>
-                    <td className="px-3 py-2">{role ? <RoleBadge name={role.name} colorSlot={role.colorSlot} /> : '—'}</td>
+                    <td className="px-3 py-2">
+                      <RoleTag role={role} />
+                    </td>
                     <td className="px-3 py-2 tabular-nums">{d.booked}</td>
                     <td className="px-3 py-2 tabular-nums">{d.showed}</td>
                     <td className="px-3 py-2 tabular-nums">{d.closed}</td>

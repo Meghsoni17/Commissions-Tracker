@@ -2,6 +2,7 @@ import { v4 as uuid } from 'uuid';
 import type { AppData, ClearedDealEntry, Deal, DeletedSalesItem, WeekEntry } from '../types';
 import { weekDays } from './dateUtils';
 import { inRange, type ResetRange } from './reset';
+import { ALL_ROLES, matchesRole } from './roles';
 
 type SalesCounts = Pick<WeekEntry, 'booked' | 'showed' | 'closed'>;
 
@@ -18,10 +19,14 @@ export interface SalesPreviewEntry {
 }
 
 /** Entries with sales numbers in the range, oldest first. Commission-only entries have nothing to clear. */
-export function buildSalesPreview(data: Pick<AppData, 'entries' | 'deals'>, range: ResetRange): SalesPreviewEntry[] {
+export function buildSalesPreview(
+  data: Pick<AppData, 'roles' | 'entries' | 'deals'>,
+  range: ResetRange,
+  roleFilter: string = ALL_ROLES,
+): SalesPreviewEntry[] {
   const rows: SalesPreviewEntry[] = [];
   for (const entry of data.entries) {
-    if (!hasSalesData(entry)) continue;
+    if (!hasSalesData(entry) || !matchesRole(entry, data.roles, roleFilter)) continue;
     const week = weekDays(entry.weekStart);
     if (!week.some((d) => inRange(d, range))) continue;
     rows.push({
@@ -34,9 +39,17 @@ export function buildSalesPreview(data: Pick<AppData, 'entries' | 'deals'>, rang
 }
 
 /** Entries in the range sitting in the commission Recently Deleted, whose sales numbers this reset can't reach. */
-export function binnedEntriesWithSales(data: Pick<AppData, 'recentlyDeleted'>, range: ResetRange): number {
+export function binnedEntriesWithSales(
+  data: Pick<AppData, 'roles' | 'recentlyDeleted'>,
+  range: ResetRange,
+  roleFilter: string = ALL_ROLES,
+): number {
   return (data.recentlyDeleted ?? []).filter(
-    (d) => d.type === 'commission' && hasSalesData(d.item) && weekDays(d.item.weekStart).some((day) => inRange(day, range)),
+    (d) =>
+      d.type === 'commission' &&
+      hasSalesData(d.item) &&
+      matchesRole(d.item, data.roles, roleFilter) &&
+      weekDays(d.item.weekStart).some((day) => inRange(day, range)),
   ).length;
 }
 

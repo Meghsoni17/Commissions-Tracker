@@ -2,6 +2,7 @@ import type { AppData, ClearedDealEntry, Deal, Deduction, DeletedItem, SuperCont
 import { weekDays } from './dateUtils';
 import { dealEntryKey, isDealEntry } from './deals';
 import { hasDayBreakdown } from './calculations';
+import { ALL_ROLES, matchesRole } from './roles';
 
 export const RECENTLY_DELETED_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -47,15 +48,16 @@ export function inRange(iso: string, range: ResetRange): boolean {
 }
 
 export function buildResetPreview(
-  data: Pick<AppData, 'entries' | 'deductions' | 'superContributions' | 'deals'>,
+  data: Pick<AppData, 'roles' | 'entries' | 'deductions' | 'superContributions' | 'deals'>,
   range: ResetRange,
   types: ResetTypes,
+  roleFilter: string = ALL_ROLES,
 ): ResetPreview {
   const entries: PreviewEntry[] = [];
   if (types.commissions) {
     for (const entry of data.entries) {
       const week = weekDays(entry.weekStart);
-      if (!week.some((d) => inRange(d, range))) continue;
+      if (!week.some((d) => inRange(d, range)) || !matchesRole(entry, data.roles, roleFilter)) continue;
       entries.push({
         entry,
         partial: !week.every((d) => inRange(d, range)),

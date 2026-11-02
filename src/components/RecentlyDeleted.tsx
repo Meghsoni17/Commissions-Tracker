@@ -4,6 +4,7 @@ import type { DeletedItem } from '../types';
 import { formatCurrencyExact } from '../lib/calculations';
 import { formatShortDate, formatWeekLabel } from '../lib/dateUtils';
 import { RECENTLY_DELETED_DAYS, deletedItemDaysLeft } from '../lib/reset';
+import { RoleTag } from './RoleBadge';
 
 function describe(d: DeletedItem): { kind: string; date: string; detail: string; amount: number } {
   if (d.type === 'commission') {
@@ -17,7 +18,7 @@ function describe(d: DeletedItem): { kind: string; date: string; detail: string;
 
 /** The Reset By Date Range safety net: restore items, or empty it for good. */
 export function RecentlyDeleted() {
-  const { recentlyDeleted, restoreRecentlyDeleted, emptyRecentlyDeleted } = useData();
+  const { roles, recentlyDeleted, restoreRecentlyDeleted, emptyRecentlyDeleted } = useData();
   const [confirmingEmpty, setConfirmingEmpty] = useState(false);
   const [now] = useState(() => Date.now());
 
@@ -72,10 +73,10 @@ export function RecentlyDeleted() {
         </p>
       ) : (
         <div className="overflow-x-auto rounded-lg border" style={{ borderColor: 'var(--border)' }}>
-          <table className="w-full text-sm border-collapse min-w-[640px]">
+          <table className="w-full text-sm border-collapse min-w-[720px]">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                {['Type', 'Date', 'Details', 'Amount', 'Days Left', ''].map((h) => (
+                {['Type', 'Date', 'Role', 'Details', 'Amount', 'Days Left', ''].map((h) => (
                   <th key={h} className="text-left px-3 py-2 font-medium" style={{ color: 'var(--text-muted)' }}>
                     {h}
                   </th>
@@ -89,6 +90,9 @@ export function RecentlyDeleted() {
                   <tr key={d.item.id} style={{ borderBottom: '1px solid var(--border)' }}>
                     <td className="px-3 py-2 whitespace-nowrap">{kind}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{date}</td>
+                    <td className="px-3 py-2">
+                      {d.type === 'commission' ? <RoleTag role={roles.find((r) => r.id === d.item.roleId)} /> : '—'}
+                    </td>
                     <td className="px-3 py-2" style={{ color: 'var(--text-secondary)' }}>
                       {detail || '—'}
                     </td>

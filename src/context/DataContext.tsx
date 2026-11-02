@@ -6,6 +6,7 @@ import { todayISO } from '../lib/dateUtils';
 import { applyCommissionRates, dealEntries, dealRate, isClearedDealEntry, isDealEntry } from '../lib/deals';
 import { moveToRecentlyDeleted, restoreDeleted } from '../lib/reset';
 import { clearSalesData, restoreSalesData } from '../lib/salesReset';
+import { assignRole as assignEntriesToRole, deleteRole as removeRole } from '../lib/roles';
 
 interface DataContextValue {
   roles: Role[];
@@ -23,6 +24,8 @@ interface DataContextValue {
   setRoleColor: (id: string, colorSlot: number) => void;
   archiveRole: (id: string, archived: boolean) => void;
   setRoleRate: (id: string, commissionRate: number | undefined) => void;
+  deleteRole: (id: string, reassignTo?: string) => void;
+  assignRole: (entryIds: ReadonlySet<string>, roleId: string) => void;
   addEntry: (entry: Omit<WeekEntry, 'id'>) => string;
   updateEntry: (id: string, entry: Omit<WeekEntry, 'id'>) => void;
   deleteEntry: (id: string) => void;
@@ -132,6 +135,20 @@ export function DataProvider({
   const setRoleRate = useCallback(
     (id: string, commissionRate: number | undefined) => {
       mutate((prev) => ({ ...prev, roles: prev.roles.map((r) => (r.id === id ? { ...r, commissionRate } : r)) }));
+    },
+    [mutate],
+  );
+
+  const deleteRole = useCallback(
+    (id: string, reassignTo?: string) => {
+      mutate((prev) => removeRole(prev, id, reassignTo));
+    },
+    [mutate],
+  );
+
+  const assignRole = useCallback(
+    (entryIds: ReadonlySet<string>, roleId: string) => {
+      mutate((prev) => assignEntriesToRole(prev, entryIds, roleId));
     },
     [mutate],
   );
@@ -347,6 +364,8 @@ export function DataProvider({
       setRoleColor,
       archiveRole,
       setRoleRate,
+      deleteRole,
+      assignRole,
       addEntry,
       updateEntry,
       deleteEntry,
@@ -378,6 +397,8 @@ export function DataProvider({
       setRoleColor,
       archiveRole,
       setRoleRate,
+      deleteRole,
+      assignRole,
       addEntry,
       updateEntry,
       deleteEntry,

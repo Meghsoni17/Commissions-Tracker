@@ -4,7 +4,9 @@ import { formatCurrencyExact } from '../lib/calculations';
 import { formatShortDate, formatWeekLabel } from '../lib/dateUtils';
 import { binnedEntriesWithSales, buildSalesPreview, type SalesPreviewEntry } from '../lib/salesReset';
 import { PreviewRow, Section, useResetRange } from './ResetDialogParts';
-import { RoleBadge } from './RoleBadge';
+import { RoleTag } from './RoleBadge';
+import { RoleFilterSelect } from './SalesFilters';
+import { ALL_ROLES } from '../lib/roles';
 
 const CONFIRM_WORD = 'DELETE';
 
@@ -17,6 +19,7 @@ export function ResetSalesDataDialog({ onClose, onCleared }: { onClose: () => vo
   const { roles, entries, deals, recentlyDeleted, clearSales } = useData();
   /** Ticks the user changed by hand; everything else follows the default for its row. */
   const [ticks, setTicks] = useState<Map<string, boolean>>(new Map());
+  const [roleFilter, setRoleFilter] = useState(ALL_ROLES);
   const [confirmText, setConfirmText] = useState('');
   const { range, fields: rangeFields } = useResetRange(() => {
     setTicks(new Map());
@@ -32,8 +35,11 @@ export function ResetSalesDataDialog({ onClose, onCleared }: { onClose: () => vo
   }, [onClose]);
 
   const roleById = useMemo(() => new Map(roles.map((r) => [r.id, r])), [roles]);
-  const preview = useMemo(() => (range ? buildSalesPreview({ entries, deals }, range) : null), [range, entries, deals]);
-  const binned = range ? binnedEntriesWithSales({ recentlyDeleted }, range) : 0;
+  const preview = useMemo(
+    () => (range ? buildSalesPreview({ roles, entries, deals }, range, roleFilter) : null),
+    [range, roleFilter, roles, entries, deals],
+  );
+  const binned = range ? binnedEntriesWithSales({ roles, recentlyDeleted }, range, roleFilter) : 0;
 
   const partialRows = preview?.filter((p) => p.partial) ?? [];
   const fullRows = preview?.filter((p) => !p.partial) ?? [];
@@ -71,7 +77,7 @@ export function ResetSalesDataDialog({ onClose, onCleared }: { onClose: () => vo
         checked={isTicked(p)}
         onChange={(checked) => setTicked(p.entry.id, checked)}
         label={`Week Of ${formatWeekLabel(p.entry.weekStart)}`}
-        badge={role ? <RoleBadge name={role.name} colorSlot={role.colorSlot} /> : undefined}
+        badge={<RoleTag role={role} />}
       >
         <span className="block tabular-nums">
           Booked {p.entry.booked} · Showed {p.entry.showed} · Closed {p.entry.closed}
@@ -112,6 +118,20 @@ export function ResetSalesDataDialog({ onClose, onCleared }: { onClose: () => vo
         </div>
 
         {rangeFields}
+
+        <div className="flex flex-col gap-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+          Role
+          <div>
+            <RoleFilterSelect
+              value={roleFilter}
+              onChange={(v) => {
+                setRoleFilter(v);
+                setTicks(new Map());
+                setConfirmText('');
+              }}
+            />
+          </div>
+        </div>
 
         {preview?.length === 0 && (
           <p className="text-sm py-2" style={{ color: 'var(--text-muted)' }}>

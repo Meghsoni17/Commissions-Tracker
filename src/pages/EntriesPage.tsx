@@ -11,7 +11,11 @@ import {
   isValidDayBreakdown,
   showRate,
 } from '../lib/calculations';
-import { RoleBadge } from '../components/RoleBadge';
+import { RoleTag } from '../components/RoleBadge';
+import { PeriodSelect, RoleFilterSelect } from '../components/SalesFilters';
+import { SalesComparisonTable } from '../components/SalesComparisonTable';
+import { ALL_ROLES, UNASSIGNED, matchesRole, roleKey } from '../lib/roles';
+import { ALL_TIME, inSalesPeriod, salesBreakdown, salesPeriodLabel } from '../lib/salesStats';
 import { DayBreakdownDialog } from '../components/DayBreakdownDialog';
 import { RecentlyDeleted } from '../components/RecentlyDeleted';
 import { RecentlyDeletedSales } from '../components/RecentlyDeletedSales';
@@ -65,11 +69,14 @@ function emptyForm(defaultRoleId: string): FormState {
 }
 
 export function EntriesPage() {
-  const { roles, entries, addEntry, updateEntry, deleteEntry } = useData();
+  const { roles, entries, addEntry, updateEntry, deleteEntry, assignRole } = useData();
   const activeRoles = roles.filter((r) => !r.archived);
   const [form, setForm] = useState<FormState>(() => emptyForm(activeRoles[0]?.id ?? ''));
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [roleFilter, setRoleFilter] = useState<string>('all');
+  const [roleFilter, setRoleFilter] = useState<string>(ALL_ROLES);
+  const [period, setPeriod] = useState(ALL_TIME);
+  const [assignIds, setAssignIds] = useState<Set<string>>(new Set());
+  const [assignTo, setAssignTo] = useState('');
   const [prompt, setPrompt] = useState<BreakdownPrompt | null>(null);
   const [resetOpen, setResetOpen] = useState(false);
   const [salesResetOpen, setSalesResetOpen] = useState(false);
@@ -80,10 +87,30 @@ export function EntriesPage() {
   const sortedEntries = useMemo(
     () =>
       [...entries]
-        .filter((e) => roleFilter === 'all' || e.roleId === roleFilter)
+        .filter((e) => matchesRole(e, roles, roleFilter) && inSalesPeriod(e, period))
         .sort((a, b) => b.weekStart.localeCompare(a.weekStart)),
-    [entries, roleFilter],
+    [entries, roles, roleFilter, period],
   );
+
+  const breakdown = useMemo(() => salesBreakdown(entries, roles, roleFilter, period), [entries, roles, roleFilter, period]);
+  const unassigned = useMemo(() => entries.filter((e) => roleKey(e.roleId, roles) === UNASSIGNED), [entries, roles]);
+  const assignable = unassigned.filter((e) => assignIds.has(e.id));
+
+  function toggleAssign(id: string, checked: boolean) {
+    setAssignIds((cur) => {
+      const next = new Set(cur);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  function runAssign() {
+    if (!assignTo || assignable.length === 0) return;
+    assignRole(new Set(assignable.map((e) => e.id)), assignTo);
+    setResetNotice(`Assigned ${assignable.length} ${assignable.length === 1 ? 'Entry' : 'Entries'} To ${roleById.get(assignTo)?.name}.`);
+    setAssignIds(new Set());
+  }
 
   function resetForm() {
     setForm(emptyForm(activeRoles[0]?.id ?? ''));
@@ -155,7 +182,8 @@ export function EntriesPage() {
   function startEdit(entry: WeekEntry) {
     setEditingId(entry.id);
     setForm({
-      roleId: entry.roleId,
+      // An unassigned entry must get a real role before it can be saved, so it isn't prefilled.
+      roleId: roleById.has(entry.roleId) ? entry.roleId : '',
       weekStart: entry.weekStart,
       booked: String(entry.booked),
       showed: String(entry.showed),
@@ -191,19 +219,10 @@ export function EntriesPage() {
             Reset Sales Data
           </button>
           {roles.length > 0 && (
-            <select
-              value={roleFilter}
-              onChange={(e) => setRoleFilter(e.target.value)}
-              className="rounded-lg border px-3 py-1.5 text-sm outline-none"
-              style={{ borderColor: 'var(--border)', background: 'var(--surface-1)', color: 'var(--text-primary)' }}
-            >
-              <option value="all">All Roles</option>
-              {roles.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
+            <>
+              <RoleFilterSelect value={roleFilter} onChange={setRoleFilter} />
+              <PeriodSelect value={period} onChange={setPeriod} />
+            </>
           )}
         </div>
       </div>
@@ -221,6 +240,71 @@ export function EntriesPage() {
         </div>
       )}
 
+      {unassigned.length > 0 && (
+        <div
+          className="rounded-lg p-3 flex flex-col gap-2 text-sm"
+          style={{
+            background: 'color-mix(in srgb, var(--warning) 12%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--warning) 60%, transparent)',
+          }}
+        >
+          <div>
+            <h3 className="font-semibold">
+              {unassigned.length} Unassigned {unassigned.length === 1 ? 'Entry' : 'Entries'}
+            </h3>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+              These still count in All Roles. Tick entries in the table, then assign them. An entry's commission moves
+              to the role you choose, and total commission doesn't change.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => setRoleFilter(UNASSIGNED)}
+              className="rounded-md px-3 py-1 text-xs font-medium cursor-pointer"
+              style={{ border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+            >
+              Show Unassigned
+            </button>
+            <button
+              onClick={() => setAssignIds(new Set(unassigned.map((e) => e.id)))}
+              className="rounded-md px-3 py-1 text-xs font-medium cursor-pointer"
+              style={{ border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+            >
+              Select All Unassigned
+            </button>
+            <select
+              aria-label="Role To Assign"
+              value={assignTo}
+              onChange={(e) => setAssignTo(e.target.value)}
+              className="rounded-md border px-2 py-1 text-xs outline-none"
+              style={inputStyle}
+            >
+              <option value="">Choose A Role</option>
+              {activeRoles.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={runAssign}
+              disabled={!assignTo || assignable.length === 0}
+              className="rounded-md px-3 py-1 text-xs font-medium cursor-pointer text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{ background: 'var(--series-1)' }}
+            >
+              Assign {assignable.length} {assignable.length === 1 ? 'Entry' : 'Entries'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {roles.length > 0 && (
+        <div className="rounded-xl border p-4" style={{ borderColor: 'var(--border)', background: 'var(--surface-1)' }}>
+          <h3 className="text-sm font-medium mb-3">Sales By Role — {salesPeriodLabel(period)}</h3>
+          <SalesComparisonTable breakdown={breakdown} roleFilter={roleFilter} />
+        </div>
+      )}
+
       {activeRoles.length === 0 ? (
         <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
           Add a role first (see the Roles tab), then log weekly numbers here.
@@ -232,18 +316,26 @@ export function EntriesPage() {
           style={{ borderColor: 'var(--border)', background: 'var(--surface-1)' }}
         >
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
-            <Field label="Role">
+            <Field label="Role" error={form.roleId ? undefined : 'Choose A Role'}>
               <select
                 value={form.roleId}
                 onChange={(e) => setForm((f) => ({ ...f, roleId: e.target.value }))}
                 className="w-full rounded-md border px-2 py-1.5 text-sm outline-none"
                 style={inputStyle}
               >
+                {!form.roleId && (
+                  <option value="" disabled>
+                    Unassigned
+                  </option>
+                )}
                 {activeRoles.map((r) => (
                   <option key={r.id} value={r.id}>
                     {r.name}
                   </option>
                 ))}
+                {roleById.get(form.roleId)?.archived && (
+                  <option value={form.roleId}>{roleById.get(form.roleId)?.name} (Archived)</option>
+                )}
               </select>
             </Field>
             <Field label="Week Of">
@@ -308,7 +400,7 @@ export function EntriesPage() {
           <div className="flex items-center gap-2">
             <button
               type="submit"
-              disabled={invalidShow || invalidClose}
+              disabled={invalidShow || invalidClose || !form.roleId}
               className="rounded-lg px-4 py-2 text-sm font-medium cursor-pointer text-white disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ background: 'var(--series-1)' }}
             >
@@ -327,9 +419,9 @@ export function EntriesPage() {
         <table className="w-full text-sm border-collapse min-w-[720px]">
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border)' }}>
-              {['Week', 'Role', 'Booked', 'Showed', 'Closed', 'Show Rate', 'Close Rate', 'Commission', ''].map((h) => (
+              {['', 'Week', 'Role', 'Booked', 'Showed', 'Closed', 'Show Rate', 'Close Rate', 'Commission', ''].map((h, i) => (
                 <th
-                  key={h}
+                  key={i}
                   className="text-left px-3 py-2 font-medium"
                   style={{ color: 'var(--text-muted)', background: 'var(--surface-1)' }}
                 >
@@ -341,7 +433,7 @@ export function EntriesPage() {
           <tbody>
             {sortedEntries.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-3 py-6 text-center" style={{ color: 'var(--text-muted)' }}>
+                <td colSpan={10} className="px-3 py-6 text-center" style={{ color: 'var(--text-muted)' }}>
                   No entries yet.
                 </td>
               </tr>
@@ -352,6 +444,16 @@ export function EntriesPage() {
               const cr = closeRate(entry.closed, entry.showed);
               return (
                 <tr key={entry.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                  <td className="pl-3 py-2 w-6">
+                    {!role && (
+                      <input
+                        type="checkbox"
+                        checked={assignIds.has(entry.id)}
+                        onChange={(e) => toggleAssign(entry.id, e.target.checked)}
+                        aria-label={`Select Week Of ${formatWeekLabel(entry.weekStart)} To Assign A Role`}
+                      />
+                    )}
+                  </td>
                   <td className="px-3 py-2 whitespace-nowrap">
                     {formatWeekLabel(entry.weekStart)}
                     {entry.commission > 0 && weekStraddlesMonths(entry.weekStart) && (
@@ -378,7 +480,7 @@ export function EntriesPage() {
                     )}
                   </td>
                   <td className="px-3 py-2">
-                    {role ? <RoleBadge name={role.name} colorSlot={role.colorSlot} /> : '—'}
+                    <RoleTag role={role} />
                   </td>
                   <td className="px-3 py-2 tabular-nums">{entry.booked}</td>
                   <td className="px-3 py-2 tabular-nums">{entry.showed}</td>

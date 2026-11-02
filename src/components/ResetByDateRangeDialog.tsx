@@ -4,7 +4,9 @@ import { formatCurrencyExact, toCents } from '../lib/calculations';
 import { formatDayLabel, formatShortDate, formatWeekLabel } from '../lib/dateUtils';
 import { buildResetPreview, type PreviewEntry, type ResetTypes } from '../lib/reset';
 import { PreviewRow, Section, useResetRange } from './ResetDialogParts';
-import { RoleBadge } from './RoleBadge';
+import { RoleTag } from './RoleBadge';
+import { RoleFilterSelect } from './SalesFilters';
+import { ALL_ROLES } from '../lib/roles';
 
 const CONFIRM_WORD = 'DELETE';
 
@@ -18,6 +20,7 @@ export function ResetByDateRangeDialog({ onClose, onDeleted }: { onClose: () => 
   const [types, setTypes] = useState<ResetTypes>({ commissions: true, deductions: false, superContributions: false });
   /** Ticks the user changed by hand; everything else follows the default for its row. */
   const [ticks, setTicks] = useState<Map<string, boolean>>(new Map());
+  const [roleFilter, setRoleFilter] = useState(ALL_ROLES);
   const [confirmText, setConfirmText] = useState('');
   const { range, fields: rangeFields } = useResetRange(() => {
     setTicks(new Map());
@@ -35,8 +38,8 @@ export function ResetByDateRangeDialog({ onClose, onDeleted }: { onClose: () => 
   const roleById = useMemo(() => new Map(roles.map((r) => [r.id, r])), [roles]);
 
   const preview = useMemo(
-    () => (range ? buildResetPreview({ entries, deductions, superContributions, deals }, range, types) : null),
-    [range, types, entries, deductions, superContributions, deals],
+    () => (range ? buildResetPreview({ roles, entries, deductions, superContributions, deals }, range, types, roleFilter) : null),
+    [range, types, roleFilter, roles, entries, deductions, superContributions, deals],
   );
 
   const partialEntries = preview?.entries.filter((p) => p.partial) ?? [];
@@ -83,7 +86,7 @@ export function ResetByDateRangeDialog({ onClose, onDeleted }: { onClose: () => 
         onChange={(checked) => setTicked(p.entry.id, checked)}
         label={`Week Of ${formatWeekLabel(p.entry.weekStart)}`}
         amount={p.entry.commission}
-        badge={role ? <RoleBadge name={role.name} colorSlot={role.colorSlot} /> : undefined}
+        badge={<RoleTag role={role} />}
       >
         <span>
           Booked {p.entry.booked} · Showed {p.entry.showed} · Closed {p.entry.closed}
@@ -137,6 +140,16 @@ export function ResetByDateRangeDialog({ onClose, onDeleted }: { onClose: () => 
         </div>
 
         {rangeFields}
+
+        <div className="flex flex-col gap-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+          Role
+          <div>
+            <RoleFilterSelect value={roleFilter} onChange={(v) => changeSearch(() => setRoleFilter(v))} />
+          </div>
+          {roleFilter !== ALL_ROLES && (types.deductions || types.superContributions) && (
+            <span>Deductions And Super Contributions Have No Role, So This Filter Doesn't Apply To Them.</span>
+          )}
+        </div>
 
         <fieldset className="flex items-center gap-x-4 gap-y-1 flex-wrap text-sm">
           <legend className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
