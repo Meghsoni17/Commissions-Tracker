@@ -1,9 +1,10 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { v4 as uuid } from 'uuid';
-import type { AppData, CommissionFix, Deal, Deduction, MonthlyGoal, Role, SuperContribution, WeekEntry } from '../types';
+import type { AppData, ClearedDealEntry, CommissionFix, Deal, Deduction, DeletedItem, MonthlyGoal, Role, SuperContribution, WeekEntry } from '../types';
 import { saveVault } from '../lib/vault';
 import { todayISO } from '../lib/dateUtils';
-import { applyCommissionRates, dealEntries, dealRate, isDealEntry } from '../lib/deals';
+import { applyCommissionRates, dealEntries, dealRate, isClearedDealEntry, isDealEntry } from '../lib/deals';
+import { moveToRecentlyDeleted, restoreDeleted } from '../lib/reset';
 
 interface DataContextValue {
   roles: Role[];
@@ -13,6 +14,7 @@ interface DataContextValue {
   superContributions: SuperContribution[];
   deals: Deal[];
   commissionFixes: CommissionFix[];
+  recentlyDeleted: DeletedItem[];
   isSampleData: boolean;
   addRole: (name: string) => void;
   renameRole: (id: string, name: string) => void;
@@ -35,6 +37,9 @@ interface DataContextValue {
   setInstallmentPaid: (dealId: string, installmentId: string, paid: boolean) => void;
   applyDealRates: (rates: Map<string, number>) => void;
   dismissCommissionFixes: () => void;
+  deleteToRecentlyDeleted: (ids: ReadonlySet<string>) => void;
+  restoreRecentlyDeleted: (ids?: ReadonlySet<string>) => void;
+  emptyRecentlyDeleted: () => void;
   clearSampleData: () => void;
 }
 
@@ -44,14 +49,22 @@ const NEXT_COLOR_SLOTS = [1, 2, 3, 4, 5, 6, 7, 8];
 
 /**
  * Swaps a deal's generated entries (close + paid installments) for fresh ones at its rate. Deals
- * saved before rates existed have none, so their entries stay as they are until reviewed.
+ * saved before rates existed have none, so their entries stay as they are until reviewed. Entries
+ * cleared by Reset By Date Range stay cleared.
  */
-function withDealEntries(entries: WeekEntry[], deal: Deal, previous?: Deal): { entries: WeekEntry[]; linkedEntryId?: string } {
+function withDealEntries(
+  entries: WeekEntry[],
+  deal: Deal,
+  cleared: ClearedDealEntry[] | undefined,
+  previous?: Deal,
+): { entries: WeekEntry[]; linkedEntryId?: string } {
   const rate = dealRate(deal);
   if (rate === null) return { entries, linkedEntryId: deal.linkedEntryId };
   const kept = entries.filter((e) => !isDealEntry(e, previous ?? deal));
   const fresh = dealEntries(deal, rate).map((e) => ({ ...e, id: uuid() }));
-  return { entries: [...kept, ...fresh], linkedEntryId: fresh[0].id };
+  const linkedEntryId = fresh[0].id;
+  const live = fresh.filter((e) => !isClearedDealEntry(e, { id: deal.id, linkedEntryId }, cleared));
+  return { entries: [...kept, ...live], linkedEntryId };
 }
 
 export function DataProvider({
@@ -202,7 +215,7 @@ export function DataProvider({
     (deal: Omit<Deal, 'id'>) => {
       mutate((prev) => {
         const newDeal: Deal = { ...deal, id: uuid() };
-        const { entries, linkedEntryId } = withDealEntries(prev.entries, newDeal);
+        const { entries, linkedEntryId } = withDealEntries(prev.entries, newDeal, prev.clearedDealEntries);
         return { ...prev, entries, deals: [...prev.deals, { ...newDeal, linkedEntryId }] };
       });
     },
@@ -214,7 +227,7 @@ export function DataProvider({
       mutate((prev) => {
         const existing = prev.deals.find((d) => d.id === id);
         const next: Deal = { ...deal, id, linkedEntryId: existing?.linkedEntryId };
-        const { entries, linkedEntryId } = withDealEntries(prev.entries, next, existing);
+        const { entries, linkedEntryId } = withDealEntries(prev.entries, next, prev.clearedDealEntries, existing);
         return { ...prev, entries, deals: prev.deals.map((d) => (d.id === id ? { ...next, linkedEntryId } : d)) };
       });
     },
@@ -250,7 +263,8 @@ export function DataProvider({
         const entries = prev.entries.filter((e) => !(e.dealId === dealId && e.id !== deal.linkedEntryId));
         const installmentEntries = dealEntries(deal, rate)
           .slice(1)
-          .map((e) => ({ ...e, id: uuid() }));
+          .map((e) => ({ ...e, id: uuid() }))
+          .filter((e) => !isClearedDealEntry(e, deal, prev.clearedDealEntries));
         return { ...prev, deals, entries: [...entries, ...installmentEntries] };
       });
     },
@@ -268,6 +282,24 @@ export function DataProvider({
     mutate((prev) => ({ ...prev, commissionFixes: undefined }));
   }, [mutate]);
 
+  const deleteToRecentlyDeleted = useCallback(
+    (ids: ReadonlySet<string>) => {
+      mutate((prev) => moveToRecentlyDeleted(prev, ids, new Date().toISOString()));
+    },
+    [mutate],
+  );
+
+  const restoreRecentlyDeleted = useCallback(
+    (ids?: ReadonlySet<string>) => {
+      mutate((prev) => restoreDeleted(prev, ids));
+    },
+    [mutate],
+  );
+
+  const emptyRecentlyDeleted = useCallback(() => {
+    mutate((prev) => ({ ...prev, recentlyDeleted: [] }));
+  }, [mutate]);
+
   const clearSampleData = useCallback(() => {
     setData({ roles: [], entries: [], monthlyGoals: [], deductions: [], superContributions: [], deals: [], isSample: false });
   }, []);
@@ -281,6 +313,7 @@ export function DataProvider({
       superContributions: data.superContributions,
       deals: data.deals,
       commissionFixes: data.commissionFixes ?? [],
+      recentlyDeleted: data.recentlyDeleted ?? [],
       isSampleData: data.isSample === true,
       addRole,
       renameRole,
@@ -303,6 +336,9 @@ export function DataProvider({
       setInstallmentPaid,
       applyDealRates,
       dismissCommissionFixes,
+      deleteToRecentlyDeleted,
+      restoreRecentlyDeleted,
+      emptyRecentlyDeleted,
       clearSampleData,
     }),
     [
@@ -328,6 +364,9 @@ export function DataProvider({
       setInstallmentPaid,
       applyDealRates,
       dismissCommissionFixes,
+      deleteToRecentlyDeleted,
+      restoreRecentlyDeleted,
+      emptyRecentlyDeleted,
       clearSampleData,
     ],
   );

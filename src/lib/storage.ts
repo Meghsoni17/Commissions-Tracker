@@ -1,6 +1,7 @@
 import type { AppData, Deal, Deduction, PaymentInstallment, SuperContribution, WeekEntry } from '../types';
 import { todayISO } from './dateUtils';
 import { isValidRatePercent } from './calculations';
+import { withoutExpired } from './reset';
 
 /** Pre-encryption plaintext key from before the encrypted vault existed. Only read once, to migrate. */
 const LEGACY_DATA_KEY = 'commissions-tracker-v1';
@@ -89,6 +90,8 @@ export function normalizeAppData(parsed: unknown): AppData | null {
     superContributions: Array.isArray(p.superContributions) ? p.superContributions.map(normalizeSuperContribution) : [],
     deals: Array.isArray(p.deals) ? p.deals.map(normalizeDeal) : [],
     commissionFixes: Array.isArray(p.commissionFixes) ? p.commissionFixes : undefined,
+    recentlyDeleted: Array.isArray(p.recentlyDeleted) ? withoutExpired(p.recentlyDeleted, Date.now()) : undefined,
+    clearedDealEntries: Array.isArray(p.clearedDealEntries) ? p.clearedDealEntries : undefined,
     isSample: p.isSample,
   };
 }

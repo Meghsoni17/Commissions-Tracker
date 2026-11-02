@@ -130,6 +130,21 @@ export interface CommissionFix {
   appliedAt: string; // ISO date
 }
 
+/**
+ * Marks one of a deal's generated entries as deliberately cleared, so rebuilding the deal's entries
+ * doesn't bring it back. `key` is "close", or the ISO date an installment was paid.
+ */
+export interface ClearedDealEntry {
+  dealId: string;
+  key: string;
+}
+
+/** Something removed by Reset By Date Range, restorable until it expires. */
+export type DeletedItem =
+  | { type: 'commission'; deletedAt: string; item: WeekEntry; dealRef?: ClearedDealEntry }
+  | { type: 'deduction'; deletedAt: string; item: Deduction }
+  | { type: 'super'; deletedAt: string; item: SuperContribution };
+
 export interface AppData {
   roles: Role[];
   entries: WeekEntry[];
@@ -139,5 +154,7 @@ export interface AppData {
   deals: Deal[];
   /** The last commission recalculation, kept so the changes can be reviewed until dismissed. */
   commissionFixes?: CommissionFix[];
+  recentlyDeleted?: DeletedItem[];
+  clearedDealEntries?: ClearedDealEntry[];
   isSample?: boolean;
 }

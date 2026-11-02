@@ -115,6 +115,11 @@ export function todayISO(): string {
   return format(new Date(), ISO_DATE);
 }
 
+/** The calendar day before the ISO date `iso`. */
+export function dayBeforeISO(iso: string): string {
+  return format(addDays(parseISO(iso), -1), ISO_DATE);
+}
+
 export function formatShortDate(iso: string): string {
   return format(parseISO(iso), 'd MMM yyyy');
 }

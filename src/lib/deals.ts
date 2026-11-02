@@ -1,6 +1,6 @@
 import { v4 as uuid } from 'uuid';
 import { addDays, addMonths, differenceInCalendarDays, format, parseISO } from 'date-fns';
-import type { AppData, CommissionFix, DayAmount, Deal, InstallmentFrequency, PaymentInstallment, WeekEntry } from '../types';
+import type { AppData, ClearedDealEntry, CommissionFix, DayAmount, Deal, InstallmentFrequency, PaymentInstallment, WeekEntry } from '../types';
 import { formatShortDate, formatWeekLabel, todayISO, weekStartISO } from './dateUtils';
 import { commissionAt, hasDayBreakdown, isValidRatePercent, toCents } from './calculations';
 
@@ -69,6 +69,21 @@ export function dealCommission(deal: DealCommissionFields, ratePercent: number):
 /** True for an entry generated from `deal` (tagged with its id, or its close entry from before tagging). */
 export function isDealEntry(entry: WeekEntry, deal: Pick<Deal, 'id' | 'linkedEntryId'>): boolean {
   return entry.dealId === deal.id || (deal.linkedEntryId !== undefined && entry.id === deal.linkedEntryId);
+}
+
+/** Which of its deal's entries this is: "close", or the date of the installment it was paid for. */
+export function dealEntryKey(entry: Pick<WeekEntry, 'id' | 'weekStart' | 'dayBreakdown'>, deal: Pick<Deal, 'linkedEntryId'>): string {
+  return entry.id === deal.linkedEntryId ? 'close' : (entry.dayBreakdown?.[0]?.date ?? entry.weekStart);
+}
+
+/** True when this generated entry was cleared on purpose, so a rebuild must leave it out. */
+export function isClearedDealEntry(
+  entry: Pick<WeekEntry, 'id' | 'weekStart' | 'dayBreakdown'>,
+  deal: Pick<Deal, 'id' | 'linkedEntryId'>,
+  cleared: ClearedDealEntry[] | undefined,
+): boolean {
+  const key = dealEntryKey(entry, deal);
+  return (cleared ?? []).some((c) => c.dealId === deal.id && c.key === key);
 }
 
 /** A deal's effective rate, if one has been set (deals saved before rates existed have none). */

@@ -13,6 +13,8 @@ import {
 } from '../lib/calculations';
 import { RoleBadge } from '../components/RoleBadge';
 import { DayBreakdownDialog } from '../components/DayBreakdownDialog';
+import { RecentlyDeleted } from '../components/RecentlyDeleted';
+import { ResetByDateRangeDialog } from '../components/ResetByDateRangeDialog';
 
 interface FormState {
   roleId: string;
@@ -67,6 +69,8 @@ export function EntriesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [prompt, setPrompt] = useState<BreakdownPrompt | null>(null);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetNotice, setResetNotice] = useState<string | null>(null);
 
   const roleById = useMemo(() => new Map(roles.map((r) => [r.id, r])), [roles]);
 
@@ -168,22 +172,44 @@ export function EntriesPage() {
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h2 className="text-xl font-semibold">Weekly Entries</h2>
-        {roles.length > 0 && (
-          <select
-            value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value)}
-            className="rounded-lg border px-3 py-1.5 text-sm outline-none"
-            style={{ borderColor: 'var(--border)', background: 'var(--surface-1)', color: 'var(--text-primary)' }}
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => setResetOpen(true)}
+            className="rounded-lg px-3 py-1.5 text-sm font-medium cursor-pointer"
+            style={{ border: '1px solid var(--border)', color: 'var(--critical)' }}
           >
-            <option value="all">All Roles</option>
-            {roles.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </select>
-        )}
+            Reset By Date Range
+          </button>
+          {roles.length > 0 && (
+            <select
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
+              className="rounded-lg border px-3 py-1.5 text-sm outline-none"
+              style={{ borderColor: 'var(--border)', background: 'var(--surface-1)', color: 'var(--text-primary)' }}
+            >
+              <option value="all">All Roles</option>
+              {roles.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
       </div>
+
+      {resetNotice && (
+        <div
+          role="status"
+          className="rounded-lg border px-4 py-2.5 flex items-center justify-between gap-3 text-sm"
+          style={{ borderColor: 'var(--border)', background: 'var(--surface-1)', color: 'var(--text-secondary)' }}
+        >
+          <span>{resetNotice}</span>
+          <button onClick={() => setResetNotice(null)} className="text-xs cursor-pointer" style={{ color: 'var(--text-muted)' }}>
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {activeRoles.length === 0 ? (
         <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
@@ -377,6 +403,18 @@ export function EntriesPage() {
           </tbody>
         </table>
       </div>
+
+      <RecentlyDeleted />
+
+      {resetOpen && (
+        <ResetByDateRangeDialog
+          onClose={() => setResetOpen(false)}
+          onDeleted={(count) => {
+            setResetOpen(false);
+            setResetNotice(`Moved ${count} ${count === 1 ? 'Item' : 'Items'} To Recently Deleted.`);
+          }}
+        />
+      )}
 
       {prompt && (
         <DayBreakdownDialog
