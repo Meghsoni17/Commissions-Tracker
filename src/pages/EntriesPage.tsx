@@ -14,7 +14,9 @@ import {
 import { RoleBadge } from '../components/RoleBadge';
 import { DayBreakdownDialog } from '../components/DayBreakdownDialog';
 import { RecentlyDeleted } from '../components/RecentlyDeleted';
+import { RecentlyDeletedSales } from '../components/RecentlyDeletedSales';
 import { ResetByDateRangeDialog } from '../components/ResetByDateRangeDialog';
+import { ResetSalesDataDialog } from '../components/ResetSalesDataDialog';
 
 interface FormState {
   roleId: string;
@@ -70,6 +72,7 @@ export function EntriesPage() {
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [prompt, setPrompt] = useState<BreakdownPrompt | null>(null);
   const [resetOpen, setResetOpen] = useState(false);
+  const [salesResetOpen, setSalesResetOpen] = useState(false);
   const [resetNotice, setResetNotice] = useState<string | null>(null);
 
   const roleById = useMemo(() => new Map(roles.map((r) => [r.id, r])), [roles]);
@@ -179,6 +182,13 @@ export function EntriesPage() {
             style={{ border: '1px solid var(--border)', color: 'var(--critical)' }}
           >
             Reset By Date Range
+          </button>
+          <button
+            onClick={() => setSalesResetOpen(true)}
+            className="rounded-lg px-3 py-1.5 text-sm font-medium cursor-pointer"
+            style={{ border: '1px solid var(--border)', color: 'var(--critical)' }}
+          >
+            Reset Sales Data
           </button>
           {roles.length > 0 && (
             <select
@@ -405,6 +415,7 @@ export function EntriesPage() {
       </div>
 
       <RecentlyDeleted />
+      <RecentlyDeletedSales />
 
       {resetOpen && (
         <ResetByDateRangeDialog
@@ -412,6 +423,16 @@ export function EntriesPage() {
           onDeleted={(count) => {
             setResetOpen(false);
             setResetNotice(`Moved ${count} ${count === 1 ? 'Item' : 'Items'} To Recently Deleted.`);
+          }}
+        />
+      )}
+
+      {salesResetOpen && (
+        <ResetSalesDataDialog
+          onClose={() => setSalesResetOpen(false)}
+          onCleared={(count) => {
+            setSalesResetOpen(false);
+            setResetNotice(`Cleared Sales Data From ${count} ${count === 1 ? 'Entry' : 'Entries'}. Commissions Are Unchanged.`);
           }}
         />
       )}

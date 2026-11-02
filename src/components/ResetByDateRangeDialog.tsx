@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { ReactNode } from 'react';
 import { useData } from '../context/DataContext';
 import { formatCurrencyExact, toCents } from '../lib/calculations';
-import { dayBeforeISO, formatDayLabel, formatShortDate, formatWeekLabel } from '../lib/dateUtils';
-import { EARLIEST_ISO, buildResetPreview, type PreviewEntry, type ResetRange, type ResetTypes } from '../lib/reset';
+import { formatDayLabel, formatShortDate, formatWeekLabel } from '../lib/dateUtils';
+import { buildResetPreview, type PreviewEntry, type ResetTypes } from '../lib/reset';
+import { PreviewRow, Section, useResetRange } from './ResetDialogParts';
 import { RoleBadge } from './RoleBadge';
-
-type Mode = 'range' | 'before';
 
 const CONFIRM_WORD = 'DELETE';
 
@@ -17,14 +15,14 @@ function plural(count: number, noun: string): string {
 /** Previews and bulk-deletes entries in a date range. Deleted items go to Recently Deleted. */
 export function ResetByDateRangeDialog({ onClose, onDeleted }: { onClose: () => void; onDeleted: (count: number) => void }) {
   const { roles, entries, deductions, superContributions, deals, deleteToRecentlyDeleted } = useData();
-  const [mode, setMode] = useState<Mode>('range');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
-  const [before, setBefore] = useState('');
   const [types, setTypes] = useState<ResetTypes>({ commissions: true, deductions: false, superContributions: false });
   /** Ticks the user changed by hand; everything else follows the default for its row. */
   const [ticks, setTicks] = useState<Map<string, boolean>>(new Map());
   const [confirmText, setConfirmText] = useState('');
+  const { range, fields: rangeFields } = useResetRange(() => {
+    setTicks(new Map());
+    setConfirmText('');
+  });
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -35,12 +33,6 @@ export function ResetByDateRangeDialog({ onClose, onDeleted }: { onClose: () => 
   }, [onClose]);
 
   const roleById = useMemo(() => new Map(roles.map((r) => [r.id, r])), [roles]);
-  const rangeBackwards = mode === 'range' && from !== '' && to !== '' && from > to;
-
-  const range = useMemo<ResetRange | null>(() => {
-    if (mode === 'before') return before ? { fromISO: EARLIEST_ISO, toISO: dayBeforeISO(before) } : null;
-    return from && to && from <= to ? { fromISO: from, toISO: to } : null;
-  }, [mode, from, to, before]);
 
   const preview = useMemo(
     () => (range ? buildResetPreview({ entries, deductions, superContributions, deals }, range, types) : null),
@@ -144,50 +136,7 @@ export function ResetByDateRangeDialog({ onClose, onDeleted }: { onClose: () => 
           </p>
         </div>
 
-        <div className="flex gap-1 flex-wrap">
-          {(
-            [
-              ['range', 'Date Range'],
-              ['before', 'Everything Before A Date'],
-            ] as const
-          ).map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              aria-pressed={mode === key}
-              onClick={() => changeSearch(() => setMode(key))}
-              className="rounded-md px-3 py-1.5 text-xs font-medium cursor-pointer"
-              style={{
-                border: '1px solid var(--border)',
-                color: mode === key ? '#fff' : 'var(--text-primary)',
-                background: mode === key ? 'var(--series-1)' : 'transparent',
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {mode === 'range' ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <DateField label="From" value={from} onChange={(v) => changeSearch(() => setFrom(v))} />
-            <DateField label="To" value={to} onChange={(v) => changeSearch(() => setTo(v))} />
-            {rangeBackwards && (
-              <span className="text-xs sm:col-span-2" style={{ color: 'var(--critical)' }}>
-                From Must Be On Or Before To.
-              </span>
-            )}
-          </div>
-        ) : (
-          <div className="flex flex-col gap-1">
-            <DateField label="Before" value={before} onChange={(v) => changeSearch(() => setBefore(v))} />
-            {before && (
-              <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>
-                Selects up to and including {formatShortDate(dayBeforeISO(before))}. {formatShortDate(before)} onwards isn't included.
-              </span>
-            )}
-          </div>
-        )}
+        {rangeFields}
 
         <fieldset className="flex items-center gap-x-4 gap-y-1 flex-wrap text-sm">
           <legend className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
@@ -306,64 +255,6 @@ export function ResetByDateRangeDialog({ onClose, onDeleted }: { onClose: () => 
           <button type="button" onClick={onClose} className="text-sm cursor-pointer px-2" style={{ color: 'var(--text-muted)' }}>
             Cancel
           </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function DateField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
-  return (
-    <label className="flex flex-col gap-1 text-xs" style={{ color: 'var(--text-muted)' }}>
-      {label}
-      <input
-        type="date"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-md border px-2 py-1.5 text-sm outline-none"
-        style={{ borderColor: 'var(--border)', background: 'var(--surface-3)', color: 'var(--text-primary)' }}
-      />
-    </label>
-  );
-}
-
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <div className="flex flex-col gap-2">
-      <h4 className="text-sm font-semibold">{title}</h4>
-      {children}
-    </div>
-  );
-}
-
-function PreviewRow({
-  checked,
-  onChange,
-  label,
-  amount,
-  badge,
-  children,
-}: {
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-  label: string;
-  amount: number;
-  badge?: ReactNode;
-  children?: ReactNode;
-}) {
-  return (
-    <div className="flex items-start gap-3 rounded-md border p-2.5" style={{ borderColor: 'var(--border)', background: 'var(--surface-1)' }}>
-      <input type="checkbox" className="mt-0.5" checked={checked} onChange={(e) => onChange(e.target.checked)} aria-label={`Select ${label}`} />
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between gap-3 flex-wrap text-sm">
-          <span className="flex items-center gap-2 flex-wrap">
-            {label}
-            {badge}
-          </span>
-          <span className="tabular-nums font-medium">{formatCurrencyExact(amount)}</span>
-        </div>
-        <div className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
-          {children}
         </div>
       </div>
     </div>

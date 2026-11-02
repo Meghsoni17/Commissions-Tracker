@@ -92,6 +92,8 @@ export function normalizeAppData(parsed: unknown): AppData | null {
     commissionFixes: Array.isArray(p.commissionFixes) ? p.commissionFixes : undefined,
     recentlyDeleted: Array.isArray(p.recentlyDeleted) ? withoutExpired(p.recentlyDeleted, Date.now()) : undefined,
     clearedDealEntries: Array.isArray(p.clearedDealEntries) ? p.clearedDealEntries : undefined,
+    recentlyDeletedSales: Array.isArray(p.recentlyDeletedSales) ? withoutExpired(p.recentlyDeletedSales, Date.now()) : undefined,
+    clearedDealSales: Array.isArray(p.clearedDealSales) ? p.clearedDealSales : undefined,
     isSample: p.isSample,
   };
 }

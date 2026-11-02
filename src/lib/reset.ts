@@ -42,7 +42,7 @@ export interface ResetPreview {
   superContributions: SuperContribution[];
 }
 
-function inRange(iso: string, range: ResetRange): boolean {
+export function inRange(iso: string, range: ResetRange): boolean {
   return iso >= range.fromISO && iso <= range.toISO;
 }
 
@@ -130,6 +130,6 @@ export function deletedItemDaysLeft(item: Pick<DeletedItem, 'deletedAt'>, nowMs:
 }
 
 /** Drops items past their 30 days. */
-export function withoutExpired(items: DeletedItem[], nowMs: number): DeletedItem[] {
+export function withoutExpired<T extends Pick<DeletedItem, 'deletedAt'>>(items: T[], nowMs: number): T[] {
   return items.filter((d) => deletedItemDaysLeft(d, nowMs) > 0);
 }

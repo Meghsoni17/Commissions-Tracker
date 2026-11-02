@@ -145,6 +145,20 @@ export type DeletedItem =
   | { type: 'deduction'; deletedAt: string; item: Deduction }
   | { type: 'super'; deletedAt: string; item: SuperContribution };
 
+/** Booked, showed and closed numbers cleared by Reset Sales Data, restorable until they expire. */
+export interface DeletedSalesItem {
+  id: string;
+  entryId: string;
+  roleId: string;
+  weekStart: string;
+  booked: number;
+  showed: number;
+  closed: number;
+  deletedAt: string;
+  /** Set when these were a deal's close numbers, which a rebuild would otherwise bring back. */
+  dealId?: string;
+}
+
 export interface AppData {
   roles: Role[];
   entries: WeekEntry[];
@@ -156,5 +170,8 @@ export interface AppData {
   commissionFixes?: CommissionFix[];
   recentlyDeleted?: DeletedItem[];
   clearedDealEntries?: ClearedDealEntry[];
+  recentlyDeletedSales?: DeletedSalesItem[];
+  /** Deal close weeks whose sales numbers were cleared; `key` is the week's Monday. */
+  clearedDealSales?: ClearedDealEntry[];
   isSample?: boolean;
 }
