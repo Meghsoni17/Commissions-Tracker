@@ -15,10 +15,13 @@ const TABS: { key: Tab; label: string }[] = [
 export function Layout({
   active,
   onChange,
+  headerActions,
   children,
 }: {
   active: Tab;
   onChange: (t: Tab) => void;
+  /** Extra controls shown before the theme toggle, e.g. save status and sign out. */
+  headerActions?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -47,7 +50,10 @@ export function Layout({
               ))}
             </nav>
           </div>
-          <ThemeToggle />
+          <div className="flex items-center gap-3">
+            {headerActions}
+            <ThemeToggle />
+          </div>
         </div>
       </header>
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6">{children}</main>

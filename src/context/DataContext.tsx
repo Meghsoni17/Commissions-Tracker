@@ -1,7 +1,8 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { v4 as uuid } from 'uuid';
 import type { AppData, ClearedDealEntry, CommissionFix, Deal, Deduction, DeletedItem, DeletedSalesItem, MonthlyGoal, Role, SuperContribution, WeekEntry } from '../types';
-import { saveVault } from '../lib/vault';
+import { fetchCloudData, hasChanges, mergeLocalIntoCloud, pruneExpired, pushChanges, type ImportCounts } from '../lib/cloud';
+import { errorMessage } from '../lib/supabase';
 import { todayISO } from '../lib/dateUtils';
 import { applyCommissionRates, dealEntries, dealRate, isClearedDealEntry, isDealEntry } from '../lib/deals';
 import { moveToRecentlyDeleted, restoreDeleted } from '../lib/reset';
@@ -18,7 +19,14 @@ interface DataContextValue {
   commissionFixes: CommissionFix[];
   recentlyDeleted: DeletedItem[];
   recentlyDeletedSales: DeletedSalesItem[];
-  isSampleData: boolean;
+  /** 'saving' while changes are being written to Supabase, 'error' if the last save failed. */
+  saveStatus: SaveStatus;
+  saveError: string | null;
+  retrySave: () => void;
+  /** Reloads from Supabase, e.g. after unlocking, unless there are unsaved changes on screen. */
+  refresh: () => Promise<void>;
+  /** Uploads local records the cloud doesn't have yet (matched by id). Safe to run more than once. */
+  importLocalData: (local: AppData) => Promise<ImportCounts>;
   addRole: (name: string) => void;
   renameRole: (id: string, name: string) => void;
   setRoleColor: (id: string, colorSlot: number) => void;
@@ -48,8 +56,9 @@ interface DataContextValue {
   clearSales: (ids: ReadonlySet<string>) => void;
   restoreSales: (ids?: ReadonlySet<string>) => void;
   emptyRecentlyDeletedSales: () => void;
-  clearSampleData: () => void;
 }
+
+export type SaveStatus = 'idle' | 'saving' | 'error';
 
 const DataContext = createContext<DataContextValue | null>(null);
 
@@ -79,24 +88,97 @@ function withDealEntries(
 }
 
 export function DataProvider({
-  cryptoKey,
+  userId,
   initialData,
   children,
 }: {
-  cryptoKey: CryptoKey;
+  userId: string;
+  /** Exactly what Supabase returned; anything that differs from it on screen gets saved. */
   initialData: AppData;
   children: ReactNode;
 }) {
-  const [data, setData] = useState<AppData>(initialData);
+  // Expired Recently Deleted items are dropped on load, which the first save then deletes from the cloud.
+  const [data, setData] = useState<AppData>(() => pruneExpired(initialData));
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  /** What the database is known to hold. Saves send the difference between this and `latestRef`. */
+  const syncedRef = useRef<AppData>(initialData);
+  const latestRef = useRef<AppData>(data);
+  const savingRef = useRef(false);
+
+  /** Saves until the database matches what's on screen. Changes made mid-save are picked up by the loop. */
+  const flush = useCallback(async () => {
+    if (savingRef.current) return;
+    savingRef.current = true;
+    try {
+      while (latestRef.current !== syncedRef.current) {
+        const target = latestRef.current;
+        if (!hasChanges(syncedRef.current, target)) {
+          syncedRef.current = target;
+          continue;
+        }
+        setSaveStatus('saving');
+        await pushChanges(userId, syncedRef.current, target);
+        syncedRef.current = target;
+      }
+      setSaveStatus('idle');
+      setSaveError(null);
+    } catch (err) {
+      console.error('Failed to save to Supabase:', err);
+      setSaveStatus('error');
+      setSaveError(errorMessage(err));
+    } finally {
+      savingRef.current = false;
+    }
+  }, [userId]);
 
   useEffect(() => {
-    saveVault(cryptoKey, data).catch((err) => {
-      console.error('Failed to save encrypted data:', err);
-    });
-  }, [cryptoKey, data]);
+    latestRef.current = data;
+    void flush();
+  }, [data, flush]);
+
+  const retrySave = useCallback(() => {
+    void flush();
+  }, [flush]);
+
+  // Warn before closing the tab while changes are unsaved.
+  useEffect(() => {
+    if (saveStatus === 'idle') return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [saveStatus]);
+
+  const refresh = useCallback(async () => {
+    if (savingRef.current || latestRef.current !== syncedRef.current) return;
+    const { data: fresh } = await fetchCloudData();
+    // Skip if something was edited while the fetch was in flight.
+    if (savingRef.current || latestRef.current !== syncedRef.current) return;
+    syncedRef.current = fresh;
+    setData(pruneExpired(fresh));
+  }, []);
+
+  const importLocalData = useCallback(
+    async (local: AppData) => {
+      if (savingRef.current || latestRef.current !== syncedRef.current) {
+        throw new Error('Please wait for your latest changes to finish saving, then try again.');
+      }
+      // Merge against what's in the cloud right now, not what this tab loaded earlier.
+      const { data: cloud } = await fetchCloudData();
+      const { merged, counts } = mergeLocalIntoCloud(cloud, local);
+      await pushChanges(userId, cloud, merged);
+      syncedRef.current = merged;
+      setData(pruneExpired(merged));
+      return counts;
+    },
+    [userId],
+  );
 
   const mutate = useCallback((fn: (prev: AppData) => AppData) => {
-    setData((prev) => ({ ...fn(prev), isSample: false }));
+    setData((prev) => fn(prev));
   }, []);
 
   const addRole = useCallback(
@@ -343,10 +425,6 @@ export function DataProvider({
     mutate((prev) => ({ ...prev, recentlyDeletedSales: [] }));
   }, [mutate]);
 
-  const clearSampleData = useCallback(() => {
-    setData({ roles: [], entries: [], monthlyGoals: [], deductions: [], superContributions: [], deals: [], isSample: false });
-  }, []);
-
   const value = useMemo<DataContextValue>(
     () => ({
       roles: data.roles,
@@ -358,7 +436,11 @@ export function DataProvider({
       commissionFixes: data.commissionFixes ?? [],
       recentlyDeleted: data.recentlyDeleted ?? [],
       recentlyDeletedSales: data.recentlyDeletedSales ?? [],
-      isSampleData: data.isSample === true,
+      saveStatus,
+      saveError,
+      retrySave,
+      refresh,
+      importLocalData,
       addRole,
       renameRole,
       setRoleColor,
@@ -388,10 +470,14 @@ export function DataProvider({
       clearSales,
       restoreSales,
       emptyRecentlyDeletedSales,
-      clearSampleData,
     }),
     [
       data,
+      saveStatus,
+      saveError,
+      retrySave,
+      refresh,
+      importLocalData,
       addRole,
       renameRole,
       setRoleColor,
@@ -421,7 +507,6 @@ export function DataProvider({
       clearSales,
       restoreSales,
       emptyRecentlyDeletedSales,
-      clearSampleData,
     ],
   );
 

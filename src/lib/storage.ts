@@ -98,7 +98,7 @@ export function normalizeAppData(parsed: unknown): AppData | null {
   };
 }
 
-/** One-time read of pre-encryption plaintext data, for migrating it into the vault. */
+/** Read of pre-encryption plaintext data, for "Import My Local Data". */
 export function loadLegacyPlaintextData(): AppData | null {
   try {
     const raw = localStorage.getItem(LEGACY_DATA_KEY);
@@ -111,8 +111,4 @@ export function loadLegacyPlaintextData(): AppData | null {
 
 export function hasLegacyPlaintextData(): boolean {
   return localStorage.getItem(LEGACY_DATA_KEY) !== null;
-}
-
-export function clearLegacyPlaintextData(): void {
-  localStorage.removeItem(LEGACY_DATA_KEY);
 }

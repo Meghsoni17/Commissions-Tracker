@@ -1,6 +1,10 @@
+/**
+ * Read-only access to the PIN-encrypted vault that older versions of CommTrack kept in this browser's
+ * localStorage. Data now lives in Supabase; this is only used by "Import My Local Data".
+ */
 import type { AppData } from '../types';
 import { normalizeAppData } from './storage';
-import { PBKDF2_ITERATIONS, SALT_BYTES, base64ToBytes, bytesToBase64, decryptJSON, deriveKey, encryptJSON, randomBytes } from './crypto';
+import { base64ToBytes, decryptJSON, deriveKey } from './crypto';
 
 const VAULT_KEY = 'commtrack-vault-v1';
 
@@ -11,64 +15,31 @@ interface VaultBlob {
   ciphertext: string; // base64
 }
 
-export interface VaultSession {
-  key: CryptoKey;
-  data: AppData;
+function readBlob(): VaultBlob | null {
+  try {
+    const raw = localStorage.getItem(VAULT_KEY);
+    return raw ? (JSON.parse(raw) as VaultBlob) : null;
+  } catch {
+    return null;
+  }
 }
 
 export function hasVault(): boolean {
-  return localStorage.getItem(VAULT_KEY) !== null;
-}
-
-export function clearVault(): void {
-  localStorage.removeItem(VAULT_KEY);
-}
-
-function readBlob(): VaultBlob | null {
-  const raw = localStorage.getItem(VAULT_KEY);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as VaultBlob;
-  } catch {
-    return null;
-  }
-}
-
-/** Creates a brand-new vault encrypted with a key derived from `pin`, replacing any existing one. */
-export async function createVault(pin: string, data: AppData): Promise<CryptoKey> {
-  const salt = randomBytes(SALT_BYTES);
-  const key = await deriveKey(pin, salt, PBKDF2_ITERATIONS);
-  const { iv, ciphertext } = await encryptJSON(key, data);
-  const blob: VaultBlob = { salt: bytesToBase64(salt), iterations: PBKDF2_ITERATIONS, iv, ciphertext };
-  localStorage.setItem(VAULT_KEY, JSON.stringify(blob));
-  return key;
+  return readBlob() !== null;
 }
 
 /**
- * Derives a key from `pin` using the vault's stored salt/iterations and attempts to decrypt.
- * Returns null if there's no vault, or if the PIN is wrong (AES-GCM auth tag fails) — a wrong
- * PIN simply can't produce a key that decrypts the data, so this IS the PIN check.
+ * Decrypts the local vault with the PIN this browser used. Returns null if the PIN is wrong (the AES-GCM
+ * auth tag fails) or there's nothing readable.
  */
-export async function openVault(pin: string): Promise<VaultSession | null> {
+export async function openVault(pin: string): Promise<AppData | null> {
   const blob = readBlob();
   if (!blob) return null;
   try {
-    const salt = base64ToBytes(blob.salt);
-    const key = await deriveKey(pin, salt, blob.iterations);
+    const key = await deriveKey(pin, base64ToBytes(blob.salt), blob.iterations);
     const decrypted = await decryptJSON<unknown>(key, { iv: blob.iv, ciphertext: blob.ciphertext });
-    const data = normalizeAppData(decrypted);
-    if (!data) return null;
-    return { key, data };
+    return normalizeAppData(decrypted);
   } catch {
     return null;
   }
-}
-
-/** Re-encrypts `data` with the already-derived `key`, keeping the vault's existing salt/iterations. */
-export async function saveVault(key: CryptoKey, data: AppData): Promise<void> {
-  const existing = readBlob();
-  if (!existing) return;
-  const { iv, ciphertext } = await encryptJSON(key, data);
-  const blob: VaultBlob = { ...existing, iv, ciphertext };
-  localStorage.setItem(VAULT_KEY, JSON.stringify(blob));
 }

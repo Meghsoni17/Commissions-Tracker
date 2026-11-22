@@ -173,5 +173,6 @@ export interface AppData {
   recentlyDeletedSales?: DeletedSalesItem[];
   /** Deal close weeks whose sales numbers were cleared; `key` is the week's Monday. */
   clearedDealSales?: ClearedDealEntry[];
+  /** Set on the sample data older local-only versions created; used to skip it when importing. */
   isSample?: boolean;
 }

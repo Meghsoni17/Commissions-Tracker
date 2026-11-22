@@ -15,30 +15,48 @@ month, across multiple roles.
   commission deltas, all-time totals, and a per-role breakdown table.
 - **Charts** — commission by role over the last 8 weeks or 6 months, and a
   show-rate/close-rate comparison across roles.
-- **Local-first** — all data is stored in your browser's `localStorage`; no
-  account or server required. The app seeds itself with sample data on first
-  run so the dashboard isn't empty — clear it any time from the banner.
+- **Cloud sync** — data is stored in Supabase under your account, so it shows up
+  on every device and browser after you sign in (email + password or magic
+  link). Row Level Security means each account can only read and write its own
+  rows. A 6-digit PIN (shared across your devices) locks the app on top of that.
+- **Import local data** — if a browser has data from the older local-only
+  version, a one-time **Import My Local Data** banner uploads it without
+  creating duplicates.
 - **Light/dark theme**, with an explicit toggle in addition to following your
   system setting.
 
 ## Getting started
+
+1. Run `supabase/schema.sql` once in the Supabase dashboard (SQL Editor → New
+   query → paste → Run). It creates the tables, Row Level Security policies
+   and grants.
+2. Put your project's values in `.env` (see `.env.example`):
+
+   ```
+   SUPABASE_URL=https://<project-ref>.supabase.co
+   SUPABASE_ANON_KEY=<anon public key>
+   ```
+
+   The same two variables must be set in Vercel. `vite.config.ts` exposes the
+   `SUPABASE_` prefix to the app.
+3. In Supabase → Authentication, enable the Email provider and add your site
+   URL(s) to the allowed redirect URLs.
 
 ```bash
 npm install
 npm run dev
 ```
 
-Then open the printed local URL. To build a static production bundle:
+To build a static production bundle:
 
 ```bash
 npm run build
 ```
 
 The output in `dist/` can be deployed to any static host (Vercel, Netlify,
-GitHub Pages, etc.) — there is no backend.
+etc.); Supabase is the only backend.
 
 ## Stack
 
-React + TypeScript + Vite, Tailwind CSS for styling, and Recharts for the
-graphs.
-Last updated: Sat 22 Aug 2026 19:22:08 AEST
+React + TypeScript + Vite, Tailwind CSS for styling, Recharts for the graphs,
+and Supabase (Postgres + Auth) for storage and sign-in.
