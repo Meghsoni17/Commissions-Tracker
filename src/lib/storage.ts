@@ -19,6 +19,7 @@ function normalizeDeduction(d: Partial<Deduction> & { id: string }): Deduction {
     paymentMethod: d.paymentMethod ?? 'Other',
     notes: d.notes,
     createdAt: d.createdAt ?? todayISO(),
+    workUsePercent: d.workUsePercent,
   };
 }
 

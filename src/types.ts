@@ -75,6 +75,26 @@ export interface Deduction {
   paymentMethod: string; // one of PAYMENT_METHODS
   notes?: string;
   createdAt: string; // ISO date the line item was logged
+  /** Share of the expense used for work, 0–100. Missing means 100% (deductions saved before this existed). */
+  workUsePercent?: number;
+}
+
+export const RECURRING_FREQUENCIES = ['Weekly', 'Fortnightly', 'Monthly', 'Quarterly', 'Yearly'] as const;
+
+export type RecurringFrequency = (typeof RECURRING_FREQUENCIES)[number];
+
+/** An expense paid on a schedule (phone plan, internet, software, car lease), counted payment by payment. */
+export interface RecurringDeduction {
+  id: string;
+  name: string;
+  amount: number; // per payment
+  frequency: RecurringFrequency;
+  startDate: string; // ISO date of the first payment
+  endDate?: string; // ISO date of the last day payments count; missing = ongoing
+  category: string; // one of DEDUCTION_CATEGORIES, or a user-defined custom category
+  workUsePercent: number; // 0–100
+  notes?: string;
+  createdAt: string; // ISO date
 }
 
 export interface SuperContribution {
@@ -166,6 +186,12 @@ export interface AppData {
   deductions: Deduction[];
   superContributions: SuperContribution[];
   deals: Deal[];
+  recurringDeductions?: RecurringDeduction[];
+  /**
+   * Set on load when the recurring_deductions table doesn't exist yet (the migration hasn't been run).
+   * Never saved.
+   */
+  recurringUnavailable?: boolean;
   /** The last commission recalculation, kept so the changes can be reviewed until dismissed. */
   commissionFixes?: CommissionFix[];
   recentlyDeleted?: DeletedItem[];

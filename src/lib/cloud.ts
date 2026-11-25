@@ -12,6 +12,8 @@ import type {
   DeletedItem,
   DeletedSalesItem,
   MonthlyGoal,
+  RecurringDeduction,
+  RecurringFrequency,
   Role,
   SuperContribution,
   WeekEntry,
@@ -179,6 +181,8 @@ const deductionsSpec: TableSpec<Deduction> = {
     payment_method: d.paymentMethod,
     notes: orNull(d.notes),
     created_at: dateOrNull(d.createdAt),
+    // Only sent once set, so saving still works before the recurring_deductions migration adds the column.
+    ...(d.workUsePercent !== undefined ? { work_use_percent: d.workUsePercent } : {}),
   }),
   fromRow: (row) => ({
     id: str(row.id),
@@ -189,6 +193,38 @@ const deductionsSpec: TableSpec<Deduction> = {
     purchaseDate: str(row.purchase_date),
     vendor: str(row.vendor),
     paymentMethod: str(row.payment_method),
+    notes: opt(row.notes as string | null),
+    createdAt: str(row.created_at),
+    workUsePercent: optNum(row.work_use_percent),
+  }),
+};
+
+const recurringSpec: TableSpec<RecurringDeduction> = {
+  table: 'recurring_deductions',
+  keyColumn: 'id',
+  keyOf: (r) => r.id,
+  select: (d) => d.recurringDeductions ?? [],
+  toRow: (r) => ({
+    id: r.id,
+    name: r.name,
+    amount: r.amount,
+    frequency: r.frequency,
+    start_date: dateOrNull(r.startDate),
+    end_date: dateOrNull(r.endDate),
+    category: r.category,
+    work_use_percent: r.workUsePercent,
+    notes: orNull(r.notes),
+    created_at: dateOrNull(r.createdAt),
+  }),
+  fromRow: (row) => ({
+    id: str(row.id),
+    name: str(row.name),
+    amount: num(row.amount),
+    frequency: (str(row.frequency) || 'Monthly') as RecurringFrequency,
+    startDate: str(row.start_date),
+    endDate: opt(row.end_date as string | null),
+    category: str(row.category),
+    workUsePercent: row.work_use_percent === null || row.work_use_percent === undefined ? 100 : num(row.work_use_percent),
     notes: opt(row.notes as string | null),
     createdAt: str(row.created_at),
   }),
@@ -277,6 +313,7 @@ const TABLES = [
   superSpec,
   recentlyDeletedSpec,
   recentlyDeletedSalesSpec,
+  recurringSpec,
 ] as unknown as TableSpec<unknown>[];
 
 // ---------- settings row ----------
@@ -331,16 +368,37 @@ export const EMPTY_DATA: AppData = {
   deals: [],
 };
 
+/** True for the errors PostgREST/Postgres give when a table doesn't exist (yet). */
+function isMissingTable(err: unknown): boolean {
+  const code = (err as { code?: unknown } | null)?.code;
+  return code === 'PGRST205' || code === '42P01';
+}
+
+/**
+ * Tables added by a later migration. Until it has been run they load as empty and are flagged, so the
+ * rest of the app keeps working.
+ */
+const OPTIONAL_TABLES = new Set(['recurring_deductions']);
+
 /** Loads everything the signed-in user has stored. RLS limits every query to their own rows. */
 export async function fetchCloudData(): Promise<CloudSnapshot> {
   const db = requireSupabase();
+  const missing = new Set<string>();
   const [tableRows, settingsRes] = await Promise.all([
-    Promise.all(TABLES.map((t) => fetchAllRows(t.table, t.keyColumn))),
+    Promise.all(
+      TABLES.map((t) =>
+        fetchAllRows(t.table, t.keyColumn).catch((err: unknown) => {
+          if (!OPTIONAL_TABLES.has(t.table) || !isMissingTable(err)) throw err;
+          missing.add(t.table);
+          return [] as Row[];
+        }),
+      ),
+    ),
     db.from('user_settings').select('*').maybeSingle(),
   ]);
   if (settingsRes.error) throw settingsRes.error;
 
-  const [roles, entries, deals, monthlyGoals, deductions, superContributions, recentlyDeleted, recentlyDeletedSales] =
+  const [roles, entries, deals, monthlyGoals, deductions, superContributions, recentlyDeleted, recentlyDeletedSales, recurringDeductions] =
     tableRows.map((rows, i) => rows.map((r) => TABLES[i].fromRow(r)));
 
   const s = (settingsRes.data ?? {}) as Row;
@@ -353,6 +411,8 @@ export async function fetchCloudData(): Promise<CloudSnapshot> {
     superContributions: superContributions as SuperContribution[],
     recentlyDeleted: recentlyDeleted as DeletedItem[],
     recentlyDeletedSales: recentlyDeletedSales as DeletedSalesItem[],
+    recurringDeductions: recurringDeductions as RecurringDeduction[],
+    ...(missing.has('recurring_deductions') ? { recurringUnavailable: true } : {}),
     commissionFixes: Array.isArray(s.commission_fixes) ? (s.commission_fixes as CommissionFix[]) : undefined,
     clearedDealEntries: Array.isArray(s.cleared_deal_entries) ? (s.cleared_deal_entries as ClearedDealEntry[]) : [],
     clearedDealSales: Array.isArray(s.cleared_deal_sales) ? (s.cleared_deal_sales as ClearedDealEntry[]) : [],

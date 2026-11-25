@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { v4 as uuid } from 'uuid';
-import type { AppData, ClearedDealEntry, CommissionFix, Deal, Deduction, DeletedItem, DeletedSalesItem, MonthlyGoal, Role, SuperContribution, WeekEntry } from '../types';
+import type { AppData, ClearedDealEntry, CommissionFix, Deal, Deduction, DeletedItem, DeletedSalesItem, MonthlyGoal, RecurringDeduction, Role, SuperContribution, WeekEntry } from '../types';
 import { fetchCloudData, hasChanges, mergeLocalIntoCloud, pruneExpired, pushChanges, type ImportCounts } from '../lib/cloud';
 import { errorMessage } from '../lib/supabase';
 import { todayISO } from '../lib/dateUtils';
@@ -14,6 +14,9 @@ interface DataContextValue {
   entries: WeekEntry[];
   monthlyGoals: MonthlyGoal[];
   deductions: Deduction[];
+  recurringDeductions: RecurringDeduction[];
+  /** True until the recurring_deductions migration has been run in Supabase. */
+  recurringUnavailable: boolean;
   superContributions: SuperContribution[];
   deals: Deal[];
   commissionFixes: CommissionFix[];
@@ -41,6 +44,9 @@ interface DataContextValue {
   addDeduction: (deduction: Omit<Deduction, 'id'>) => void;
   updateDeduction: (id: string, deduction: Omit<Deduction, 'id'>) => void;
   deleteDeduction: (id: string) => void;
+  addRecurringDeduction: (item: Omit<RecurringDeduction, 'id'>) => void;
+  updateRecurringDeduction: (id: string, item: Omit<RecurringDeduction, 'id'>) => void;
+  deleteRecurringDeduction: (id: string) => void;
   addSuperContribution: (contribution: Omit<SuperContribution, 'id'>) => void;
   updateSuperContribution: (id: string, contribution: Omit<SuperContribution, 'id'>) => void;
   deleteSuperContribution: (id: string) => void;
@@ -61,6 +67,8 @@ interface DataContextValue {
 export type SaveStatus = 'idle' | 'saving' | 'error';
 
 const DataContext = createContext<DataContextValue | null>(null);
+
+const EMPTY_RECURRING: RecurringDeduction[] = [];
 
 const NEXT_COLOR_SLOTS = [1, 2, 3, 4, 5, 6, 7, 8];
 
@@ -294,6 +302,30 @@ export function DataProvider({
     [mutate],
   );
 
+  const addRecurringDeduction = useCallback(
+    (item: Omit<RecurringDeduction, 'id'>) => {
+      mutate((prev) => ({ ...prev, recurringDeductions: [...(prev.recurringDeductions ?? []), { ...item, id: uuid() }] }));
+    },
+    [mutate],
+  );
+
+  const updateRecurringDeduction = useCallback(
+    (id: string, item: Omit<RecurringDeduction, 'id'>) => {
+      mutate((prev) => ({
+        ...prev,
+        recurringDeductions: (prev.recurringDeductions ?? []).map((r) => (r.id === id ? { ...item, id } : r)),
+      }));
+    },
+    [mutate],
+  );
+
+  const deleteRecurringDeduction = useCallback(
+    (id: string) => {
+      mutate((prev) => ({ ...prev, recurringDeductions: (prev.recurringDeductions ?? []).filter((r) => r.id !== id) }));
+    },
+    [mutate],
+  );
+
   const addSuperContribution = useCallback(
     (contribution: Omit<SuperContribution, 'id'>) => {
       mutate((prev) => ({ ...prev, superContributions: [...prev.superContributions, { ...contribution, id: uuid() }] }));
@@ -431,6 +463,8 @@ export function DataProvider({
       entries: data.entries,
       monthlyGoals: data.monthlyGoals,
       deductions: data.deductions,
+      recurringDeductions: data.recurringDeductions ?? EMPTY_RECURRING,
+      recurringUnavailable: data.recurringUnavailable === true,
       superContributions: data.superContributions,
       deals: data.deals,
       commissionFixes: data.commissionFixes ?? [],
@@ -455,6 +489,9 @@ export function DataProvider({
       addDeduction,
       updateDeduction,
       deleteDeduction,
+      addRecurringDeduction,
+      updateRecurringDeduction,
+      deleteRecurringDeduction,
       addSuperContribution,
       updateSuperContribution,
       deleteSuperContribution,
@@ -492,6 +529,9 @@ export function DataProvider({
       addDeduction,
       updateDeduction,
       deleteDeduction,
+      addRecurringDeduction,
+      updateRecurringDeduction,
+      deleteRecurringDeduction,
       addSuperContribution,
       updateSuperContribution,
       deleteSuperContribution,
